@@ -24,6 +24,15 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+
+  // Reject malformed invoice tokens before hitting the DB — blocks enumeration attempts
+  // that use non-UUID strings; valid share tokens are always UUIDv4.
+  if (pathname.startsWith("/invoice/")) {
+    const token = pathname.slice("/invoice/".length).split("/")[0];
+    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidV4.test(token)) return NextResponse.redirect(new URL("/login", request.url));
+  }
+
   if (!user && !pathname.startsWith("/login") && !pathname.startsWith("/auth/confirm") && !pathname.startsWith("/invoice/")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

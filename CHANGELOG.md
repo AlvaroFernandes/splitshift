@@ -6,6 +6,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.39] - 2026-05-18
+
+### Fixed / Security
+
+- **Double-submit protection on Log Entry** — the Save/Update button now disables itself and shows a spinner while the async save is in-flight; a guard at the top of `handleSubmit` also prevents re-entry if the state update races. Prevents duplicate entries from rapid clicks.
+- **`init()` error handling** — the app-data initialisation function is now wrapped in a try/catch; a network failure or Supabase error on load now shows a "Failed to load your data. Please refresh the page." toast and sets `loading = false`, instead of leaving the UI frozen on a blank loading screen indefinitely.
+- **`advanceInvoice` atomicity** — if the entry-archiving step fails after the invoice has already been saved, the invoice is now rolled back (`deleteInvoice` called) before showing the error. Prevents the double-invoicing scenario where an invoice exists in history for entries that were never archived.
+- **Invoice token enumeration protection** — `proxy.ts` now validates that `/invoice/<token>` paths contain a well-formed UUIDv4 before passing the request to the page handler; non-UUID strings (enumeration probes, crawler noise) are immediately redirected to `/login` without touching the database.
+
+### Added
+
+- **Unit tests** — Vitest added as a dev dependency; `__tests__/calculations.test.ts` covers 23 cases across the full calculation engine:
+  - `calcHours`: standard shifts, half-hour, overnight, midnight edge cases, empty input
+  - `weekStart`: each day of the week, Sunday wraparound, DST boundary (Australia/Sydney March 2026)
+  - `processEntries`: 4h minimum call, all-TFN, TFN/ABN split, multi-entry weekly accumulation, weekly TFN reset, overtime, combined overtime+TFN/ABN split, separate TFN rate, break deduction, sort-order correctness
+- **`npm test`** script added; CI pipeline updated to run tests before the build step on every push and PR.
+
+---
+
 ## [0.5.38] - 2026-05-18
 
 ### Fixed / Security

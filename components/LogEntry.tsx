@@ -46,12 +46,17 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
     }));
   };
 
+  const [isSaving, setIsSaving] = React.useState(false);
+
   const handleSubmit = React.useCallback(async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     const ok = await onSave(form);
+    setIsSaving(false);
     if (ok && !editEntry) {
       setForm(prev => ({ date: prev.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" }));
     }
-  }, [form, onSave, editEntry]);
+  }, [form, onSave, editEntry, isSaving]);
 
   return (
     <div>
@@ -151,9 +156,9 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
         )}
 
         <div className="btn-row">
-          <button className="btn-primary" onClick={handleSubmit}>
-            <i className="ti ti-check" aria-hidden="true" />
-            {editEntry ? "Update Entry" : "Add Entry"}
+          <button className="btn-primary" onClick={handleSubmit} disabled={isSaving}>
+            <i className={`ti ${isSaving ? "ti-loader-2" : "ti-check"}`} aria-hidden="true" />
+            {isSaving ? "Saving…" : editEntry ? "Update Entry" : "Add Entry"}
           </button>
           {editEntry ? (
             <button className="btn-secondary" onClick={onCancel}>

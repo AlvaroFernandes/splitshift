@@ -67,74 +67,80 @@ export function useAppData() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/login"); return; }
-      setUserId(user.id);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { router.push("/login"); return; }
+        setUserId(user.id);
 
-      await ensureProfile(supabase, user.id, user.email);
+        await ensureProfile(supabase, user.id, user.email);
 
-      const { role, adminId } = await getProfile(supabase, user.id);
-      setUserRole(role);
+        const { role, adminId } = await getProfile(supabase, user.id);
+        setUserRole(role);
 
-      if (role === "admin") {
-        const [team, settingsRow, log] = await Promise.all([
-          getManagedTeam(supabase, user.id),
-          getSettings(supabase, user.id),
-          getAuditLog(supabase),
-        ]);
-        setManagedUsers(team.users);
-        setManagedAdmins(team.admins);
-        setManagedViewers(team.viewers);
-        setAuditLog(log);
+        if (role === "admin") {
+          const [team, settingsRow, log] = await Promise.all([
+            getManagedTeam(supabase, user.id),
+            getSettings(supabase, user.id),
+            getAuditLog(supabase),
+          ]);
+          setManagedUsers(team.users);
+          setManagedAdmins(team.admins);
+          setManagedViewers(team.viewers);
+          setAuditLog(log);
 
-        const workerIds = team.users.map(u => u.id);
-        const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
-          getAdminEntries(supabase, workerIds),
-          getWorkerSettings(supabase, workerIds),
-        ]);
-        setEntries(fetchedEntries);
-        setWorkerSettings(fetchedWorkerSettings);
-        if (settingsRow) {
-          setSettings(settingsRow.settings);
-          if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
-          if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
+          const workerIds = team.users.map(u => u.id);
+          const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
+            getAdminEntries(supabase, workerIds),
+            getWorkerSettings(supabase, workerIds),
+          ]);
+          setEntries(fetchedEntries);
+          setWorkerSettings(fetchedWorkerSettings);
+          if (settingsRow) {
+            setSettings(settingsRow.settings);
+            if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
+            if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
+          }
+        } else if (role === "viewer") {
+          if (!adminId) { setLoading(false); return; }
+          const [team, settingsRow] = await Promise.all([
+            getManagedTeam(supabase, adminId),
+            getSettings(supabase, user.id),
+          ]);
+          setManagedUsers(team.users);
+
+          const workerIds = team.users.map(u => u.id);
+          const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
+            getAdminEntries(supabase, workerIds),
+            getWorkerSettings(supabase, workerIds),
+          ]);
+          setEntries(fetchedEntries);
+          setWorkerSettings(fetchedWorkerSettings);
+          if (settingsRow) {
+            setSettings(settingsRow.settings);
+            if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
+            if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
+          }
+        } else {
+          const [fetchedEntries, settingsRow, invoices] = await Promise.all([
+            getEntries(supabase, user.id),
+            getSettings(supabase, user.id),
+            getInvoices(supabase, user.id),
+          ]);
+          setEntries(fetchedEntries);
+          if (settingsRow) {
+            setSettings(settingsRow.settings);
+            if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
+            if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
+          }
+          setInvoiceHistory(invoices);
         }
-      } else if (role === "viewer") {
-        if (!adminId) { setLoading(false); return; }
-        const [team, settingsRow] = await Promise.all([
-          getManagedTeam(supabase, adminId),
-          getSettings(supabase, user.id),
-        ]);
-        setManagedUsers(team.users);
 
-        const workerIds = team.users.map(u => u.id);
-        const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
-          getAdminEntries(supabase, workerIds),
-          getWorkerSettings(supabase, workerIds),
-        ]);
-        setEntries(fetchedEntries);
-        setWorkerSettings(fetchedWorkerSettings);
-        if (settingsRow) {
-          setSettings(settingsRow.settings);
-          if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
-          if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
-        }
-      } else {
-        const [fetchedEntries, settingsRow, invoices] = await Promise.all([
-          getEntries(supabase, user.id),
-          getSettings(supabase, user.id),
-          getInvoices(supabase, user.id),
-        ]);
-        setEntries(fetchedEntries);
-        if (settingsRow) {
-          setSettings(settingsRow.settings);
-          if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
-          if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
-        }
-        setInvoiceHistory(invoices);
+        setLoading(false);
+      } catch (err) {
+        console.error("[init] failed to load app data:", err);
+        showToast("Failed to load your data. Please refresh the page.", "err");
+        setLoading(false);
       }
-
-      setLoading(false);
     };
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -450,8 +456,9 @@ export function useAppData() {
     wkSunDate.setDate(wkSunDate.getDate() + 6);
     const wkSun = wkSunDate.toISOString().slice(0, 10);
 
+    let saved: SavedInvoice | null = null;
     if (userId) {
-      const saved = await saveInvoice(supabase, {
+      saved = await saveInvoice(supabase, {
         id: genId(), userId,
         invoiceNum:  settings.invoiceNum || 1,
         issueDate:   settings.invoiceDate || todayStr(),
@@ -463,18 +470,24 @@ export function useAppData() {
         periodEnd:   wkSun,
       });
       if (!saved) { showToast("Could not save invoice history", "err"); return; }
-      setInvoiceHistory(prev => [saved, ...prev]);
     }
 
-    // Archive all entries from this week (TFN + ABN) now that the week is invoiced
+    // Archive all entries from this week (TFN + ABN) now that the week is invoiced.
+    // If archiving fails, roll back the just-saved invoice to prevent double-invoicing.
     const toArchiveIds = allPeriodEntries
       .filter(e => !e.archived && weekStart(e.date) === oldestWeek)
       .map(e => e.id);
     if (toArchiveIds.length > 0 && userId) {
       const ok = await archiveEntries(supabase, toArchiveIds);
-      if (!ok) { showToast("Could not archive entries", "err"); return; }
+      if (!ok) {
+        if (saved) await deleteInvoice(supabase, saved.id);
+        showToast("Could not archive entries — invoice was not saved", "err");
+        return;
+      }
       setEntries(prev => prev.map(e => toArchiveIds.includes(e.id) ? { ...e, archived: true } : e));
     }
+
+    if (saved) setInvoiceHistory(prev => [saved!, ...prev]);
 
     const s = { ...settings, invoiceNum: (settings.invoiceNum || 1) + 1, invoiceDate: todayStr(), invoiceItems: [] };
     setSettings(s);
