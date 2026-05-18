@@ -6,6 +6,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.38] - 2026-05-18
+
+### Fixed / Security
+
+- **Auth proxy confirmed active** — Next.js 16 uses `proxy.ts` (not the older `middleware.ts` convention); `proxy.ts` with `export function proxy` was already correct and registered. Audit note corrected.
+- **HSTS header added** — `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` added to `next.config.ts`; enforces HTTPS for 2 years and allows HSTS preload list submission.
+
+### Added
+
+- **Global error boundary** — `app/error.tsx` added; unhandled React errors now show a friendly "Something went wrong / Try again" card instead of crashing the entire UI.
+- **Health-check endpoint** — `GET /api/health` returns `{ status: "ok", ts: <epoch> }` on the edge runtime; ready for load-balancer and uptime-monitoring integrations.
+- **`.env.example`** — documents all three required environment variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) with instructions on where to find each in the Supabase dashboard.
+- **GitHub Actions CI pipeline** — `.github/workflows/ci.yml` runs `npm ci` + `next build` (type-check included) on every push to `main` and every PR; uses placeholder env vars so the build completes without live Supabase credentials.
+
+---
+
 ## [0.5.37] - 2026-05-18
 
 ### Performance
