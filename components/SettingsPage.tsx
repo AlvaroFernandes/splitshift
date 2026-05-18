@@ -36,14 +36,20 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
   useEffect(() => { setS({ ...DEFAULT_SETTINGS, ...settings }); }, [settings]);
 
   useEffect(() => {
-    setWorkerRules(
-      (managedUsers ?? []).map(u => ({
+    setWorkerRules(prev => {
+      const next = (managedUsers ?? []).map(u => ({
         userId:            u.id,
         name:              u.name || u.email,
         tfnLimit:          workerSettings?.[u.id]?.tfnLimit          ?? 30,
         overtimeThreshold: workerSettings?.[u.id]?.overtimeThreshold ?? 12,
-      }))
-    );
+      }));
+      if (prev.length === next.length &&
+          prev.every((r, i) => r.userId === next[i].userId &&
+                               r.tfnLimit === next[i].tfnLimit &&
+                               r.overtimeThreshold === next[i].overtimeThreshold))
+        return prev;
+      return next;
+    });
   }, [managedUsers, workerSettings]);
 
   const STABS = [

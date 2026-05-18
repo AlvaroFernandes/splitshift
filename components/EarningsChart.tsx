@@ -36,7 +36,8 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
 
   if (bars.length === 0) return null;
 
-  const maxTotal = Math.max(...bars.map(b => b.total), 1);
+  const maxTotal    = Math.max(...bars.map(b => b.total), 1);
+  const FILL_OPACITY = 0.75;
   const BAR_W   = 42;
   const GAP     = 6;
   const CHART_H = 120;
@@ -86,21 +87,21 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
               <g key={b.key}>
                 {isAdmin ? (
                   <rect x={x} y={CHART_H - totalH} width={BAR_W} height={totalH} rx={3}
-                    fill="var(--color-text-success)" opacity={0.7} />
+                    fill="var(--color-text-success)" fillOpacity={FILL_OPACITY} />
                 ) : (
                   <>
                     {tfnH > 0 && (
                       <rect x={x} y={CHART_H - tfnH} width={BAR_W} height={tfnH}
                         rx={abnH > 0 ? 0 : 3}
-                        style={{ fill: "var(--color-text-success)", opacity: 0.7 }} />
+                        fill="var(--color-text-success)" fillOpacity={FILL_OPACITY} />
                     )}
                     {abnH > 0 && (
                       <rect x={x} y={CHART_H - tfnH - abnH} width={BAR_W} height={abnH} rx={3}
-                        style={{ fill: "var(--color-text-info)", opacity: 0.7 }} />
+                        fill="var(--color-text-info)" fillOpacity={FILL_OPACITY} />
                     )}
                     {totalH <= 2 && (
                       <rect x={x} y={CHART_H - 2} width={BAR_W} height={2} rx={1}
-                        style={{ fill: "var(--color-border-secondary)" }} />
+                        fill="var(--color-border-secondary)" />
                     )}
                   </>
                 )}
@@ -125,11 +126,11 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
       {!isAdmin && (
         <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: "var(--color-text-secondary)" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "var(--color-text-success)", opacity: 0.7 }} />
+            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "var(--color-text-success)", opacity: FILL_OPACITY }} />
             TFN
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "var(--color-text-info)", opacity: 0.7 }} />
+            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "var(--color-text-info)", opacity: FILL_OPACITY }} />
             ABN
           </span>
         </div>

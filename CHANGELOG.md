@@ -6,6 +6,39 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.37] - 2026-05-18
+
+### Performance
+
+- **Tailwind import narrowed** — `@import "tailwindcss"` → `@import "tailwindcss/preflight"` in `globals.css`; since no Tailwind utility classes are used anywhere in the app, the full import was triggering a full-codebase utility scan on every build with zero output. Importing only the preflight keeps the CSS reset while removing the dead scan pass.
+- **Table hover repaint scoped** — added `contain: paint` to `.data-table` so hover repaints are bounded to the table element and can't cause ancestor-level redraws; changed `background` shorthand → `background-color` on the hover rule (avoids resetting background-image/gradient/etc sub-properties that aren't set).
+- **SVG chart opacity unified** — replaced the mixed `opacity` presentation attribute (admin bars) / `style.opacity` (worker bars) / `style.opacity` (legend swatches) with a single `FILL_OPACITY` constant and the more semantically correct `fillOpacity` SVG attribute on all bar rects; `fillOpacity` affects only the fill channel, not the element itself, so no future text sibling placed inside a `<g>` can accidentally inherit it. Legend swatches remain consistent via the same constant.
+
+---
+
+## [0.5.36] - 2026-05-18
+
+### Performance
+
+- **Dashboard O(n·m) loops eliminated** — `downloadAdminCSV` now pre-builds `byUser` and `workerMap` Maps before iterating, replacing per-user `processed.filter()` and per-entry `users.find()` calls with O(1) Map lookups. `userStats` aggregation switched from a filter-per-user loop to a single O(n) pass; `userMap` added as a memoised `Map<id, name>` so the Recent days render also avoids repeated linear scans.
+- **EntriesList O(n·m) render and CSV fixed** — `userMap` memoised as `Map<id, name>`; table row lookup and `downloadEntriesCSV` both use the Map instead of `users?.find()` per row.
+- **SettingsPage workerRules stable setter** — the `useEffect` that derives worker rule rows now uses a setter function with a structural equality check; if the derived array is identical to the previous one (same length, same userId/tfnLimit/overtimeThreshold per position) it returns the existing reference, preventing a downstream re-render.
+- **AdminEditModal preview memoised** — `breakMinsNum`, `previewRaw`, `previewActual`, `previewH`, `previewEarn` wrapped in `useMemo` keyed on `[form.breakMins, form.startTime, form.endTime, form.hourlyRate]`; preview no longer recomputes when other fields (date, job description, client) change. JSX now references `previewEarn` directly instead of recomputing the expression inline.
+- **html2canvas scale reduced** — `scale: 2` → `scale: 1.5` in `downloadPdf`; reduces the off-screen canvas pixel count from 4× to 2.25× the element's CSS size, cutting peak main-thread memory use during PDF export.
+- **byDate sort optimised** — replaced `.sort().reverse()` with a single `.sort((a, b) => b.localeCompare(a))` pass in `Dashboard.tsx`.
+
+---
+
+## [0.5.35] - 2026-05-18
+
+### Performance
+
+- **Supabase `SELECT *` eliminated** — all profile queries now select only the columns actually consumed (`user_id, name, email` for list queries; `role, admin_id` for profile lookup); the inline viewer refresh in `handleInvite` also narrowed. Reduces per-query payload and avoids sending any future columns to the client automatically.
+- **Audit log fetch narrowed** — `getAuditLog` now selects explicit columns instead of `*`, and the default fetch limit drops from 200 → 100 rows; halves the initial admin load on large teams.
+- **`saveSettings` stale closure fixed** — `showToast` added to the `useCallback` dependency array in `useAppData.ts`; since `showToast` is itself stable (empty-dep callback) this has no runtime cost but eliminates the hidden closure risk if the callback ever gains deps in future.
+
+---
+
 ## [0.5.34] - 2026-05-17
 
 ### Performance / Fixed

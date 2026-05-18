@@ -20,10 +20,10 @@ export async function logActivity(
   });
 }
 
-export async function getAuditLog(supabase: SupabaseClient, limit = 200): Promise<AuditEntry[]> {
+export async function getAuditLog(supabase: SupabaseClient, limit = 100): Promise<AuditEntry[]> {
   const { data } = await supabase
     .from("audit_log")
-    .select("*")
+    .select("id, admin_id, actor_id, action, target_type, target_id, meta, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { Entry, FormState } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc } from "@/lib/formatters";
@@ -21,10 +21,13 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
   });
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
-  const breakMinsNum  = Math.max(0, parseInt(form.breakMins || "0") || 0);
-  const previewRaw    = calcHours(form.startTime, form.endTime);
-  const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
-  const previewH      = Math.max(MIN_HOURS, previewActual);
+  const { breakMinsNum, previewRaw, previewActual, previewH, previewEarn } = useMemo(() => {
+    const breakMinsNum  = Math.max(0, parseInt(form.breakMins || "0") || 0);
+    const previewRaw    = calcHours(form.startTime, form.endTime);
+    const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
+    const previewH      = Math.max(MIN_HOURS, previewActual);
+    return { breakMinsNum, previewRaw, previewActual, previewH, previewEarn: previewH * parseFloat(form.hourlyRate || "0") };
+  }, [form.breakMins, form.startTime, form.endTime, form.hourlyRate]);
 
   const handleSave = () => {
     if (!form.date || !form.jobDescription.trim() || !form.startTime || !form.endTime || !form.hourlyRate) return;
@@ -104,7 +107,7 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
             <span>
               <span className="muted">Est. earnings: </span>
               <strong className="mono" style={{ color: "var(--color-text-success)" }}>
-                {fc(previewH * parseFloat(form.hourlyRate || "0"))}
+                {fc(previewEarn)}
               </strong>
             </span>
             {previewActual < previewRaw && (

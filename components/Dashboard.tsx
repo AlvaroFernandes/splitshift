@@ -15,6 +15,14 @@ function downloadAdminCSV(
   periodStart: string,
   periodEnd: string,
 ) {
+  const byUser = new Map<string, ProcessedEntry[]>();
+  for (const e of processed) {
+    const uid = e.ownerId ?? "";
+    if (!byUser.has(uid)) byUser.set(uid, []);
+    byUser.get(uid)!.push(e);
+  }
+  const workerMap = new Map(users.map(u => [u.id, u]));
+
   const rows: string[] = [];
   const period = `${periodStart || "All time"} to ${periodEnd || "All time"}`;
 
@@ -30,7 +38,7 @@ function downloadAdminCSV(
   ].map(csvEsc).join(","));
 
   for (const u of users) {
-    const ue = processed.filter(e => e.ownerId === u.id);
+    const ue = byUser.get(u.id) ?? [];
     if (ue.length === 0) continue;
     rows.push([
       u.name, u.email, ue.length,
@@ -58,7 +66,7 @@ function downloadAdminCSV(
     a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)
   );
   for (const e of sorted) {
-    const workerName = users.find(u => u.id === e.ownerId)?.name ?? "Unknown";
+    const workerName = workerMap.get(e.ownerId ?? "")?.name ?? "Unknown";
     rows.push([
       e.date, workerName, e.jobDescription, e.client ?? "",
       e.startTime, e.endTime, e.breakMins, e.total.toFixed(2), e.hourlyRate.toFixed(2),
@@ -83,21 +91,23 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
 }) {
   const { byDate, dates } = useMemo(() => {
     const byDate: Record<string, ProcessedEntry[]> = {};
-    processed.forEach(e => { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); });
-    return { byDate, dates: Object.keys(byDate).sort().reverse().slice(0, 10) };
+    for (const e of processed) { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); }
+    return { byDate, dates: Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 10) };
   }, [processed]);
+
+  const userMap = useMemo(() => new Map((users ?? []).map(u => [u.id, u.name])), [users]);
 
   const userStats = useMemo(() => {
     if (!isAdmin || !users) return [];
-    return users.map(u => {
-      const ue = processed.filter(e => e.ownerId === u.id);
-      return {
-        ...u,
-        entries:  ue.length,
-        hours:    ue.reduce((a, e) => a + e.total, 0),
-        earnings: ue.reduce((a, e) => a + e.totalEarnings, 0),
-      };
-    }).sort((a, b) => b.hours - a.hours);
+    const byUser = new Map<string, { entries: number; hours: number; earnings: number }>();
+    for (const e of processed) {
+      const uid = e.ownerId ?? "";
+      const cur = byUser.get(uid) ?? { entries: 0, hours: 0, earnings: 0 };
+      byUser.set(uid, { entries: cur.entries + 1, hours: cur.hours + e.total, earnings: cur.earnings + e.totalEarnings });
+    }
+    return users
+      .map(u => ({ ...u, ...(byUser.get(u.id) ?? { entries: 0, hours: 0, earnings: 0 }) }))
+      .sort((a, b) => b.hours - a.hours);
   }, [processed, users, isAdmin]);
 
   if (isAdmin && users) {
@@ -158,7 +168,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
                   return de.map((e, i) => (
                     <tr key={e.id}>
                       {i === 0 && <td className="mono" style={{ fontSize: 12 }} rowSpan={de.length}>{fd(date)}</td>}
-                      <td style={{ fontSize: 12 }}>{users.find(u => u.id === e.ownerId)?.name ?? "—"}</td>
+                      <td style={{ fontSize: 12 }}>{userMap.get(e.ownerId ?? "") ?? "—"}</td>
                       <td style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{e.jobDescription}</td>
                       <td className="mono">{fh(e.total)}</td>
                       <td className="mono">{fc(e.totalEarnings)}</td>

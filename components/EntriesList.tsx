@@ -8,7 +8,7 @@ function csvEsc(v: string | number): string {
   return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function downloadEntriesCSV(rows: ProcessedEntry[], users: ManagedUser[] | undefined, isAdmin: boolean) {
+function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>, isAdmin: boolean) {
   const header = [
     "Date", "Job Description", "Client",
     ...(isAdmin ? ["Worker"] : []),
@@ -21,7 +21,7 @@ function downloadEntriesCSV(rows: ProcessedEntry[], users: ManagedUser[] | undef
     e.date,
     e.jobDescription,
     e.client ?? "",
-    ...(isAdmin ? [users?.find(u => u.id === e.ownerId)?.name ?? ""] : []),
+    ...(isAdmin ? [userMap.get(e.ownerId ?? "") ?? ""] : []),
     e.startTime,
     e.endTime,
     e.breakMins,
@@ -74,6 +74,11 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
     return rows;
   }, [processed, isAdmin, userFilter, clientFilter]);
 
+  const userMap = useMemo(
+    () => new Map((users ?? []).map(u => [u.id, u.name])),
+    [users],
+  );
+
   const hasClients = clientOptions.length > 0;
 
   return (
@@ -114,7 +119,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
           <button
             className="btn-secondary"
             style={{ fontSize: 12, padding: "4px 10px", marginLeft: "auto" }}
-            onClick={() => downloadEntriesCSV(visible, users, !!isAdmin)}
+            onClick={() => downloadEntriesCSV(visible, userMap, !!isAdmin)}
             disabled={visible.length === 0}
           >
             <i className="ti ti-download" aria-hidden="true" /> CSV
@@ -127,7 +132,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
           <button
             className="btn-secondary"
             style={{ fontSize: 12, padding: "4px 10px" }}
-            onClick={() => downloadEntriesCSV(visible, users, !!isAdmin)}
+            onClick={() => downloadEntriesCSV(visible, userMap, !!isAdmin)}
           >
             <i className="ti ti-download" aria-hidden="true" /> CSV
           </button>
@@ -161,7 +166,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
                   <td className="mono" style={{ fontSize: 12 }}>{fd(e.date)}</td>
                   {isAdmin && (
                     <td style={{ fontSize: 12 }}>
-                      {users?.find(u => u.id === e.ownerId)?.name ?? "—"}
+                      {userMap.get(e.ownerId ?? "") ?? "—"}
                     </td>
                   )}
                   <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

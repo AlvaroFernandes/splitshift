@@ -172,12 +172,12 @@ export function useAppData() {
     return deleteEntry(supabase, id);
   }, []);
 
-  // supabase stable; showToast only reads stable setToast
+  // supabase stable (useRef) — omitted from deps intentionally
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const saveSettings = useCallback(async (s: Settings, ps: string, pe: string, uid: string) => {
     const ok = await saveSettingsSvc(supabase, uid, s, ps, pe);
     if (!ok) showToast("Could not save settings", "err");
-  }, []);
+  }, [showToast]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const signOut = useCallback(async () => {
@@ -411,7 +411,7 @@ export function useAppData() {
       const admins = await getManagedAdmins(supabase, userId!);
       setManagedAdmins(admins);
     } else if (role === "viewer") {
-      const viewers = await supabase.from("profiles").select("*").eq("admin_id", userId!).eq("role", "viewer");
+      const viewers = await supabase.from("profiles").select("user_id, name, email").eq("admin_id", userId!).eq("role", "viewer");
       setManagedViewers((viewers.data ?? []).map((p: Record<string, unknown>) => ({
         id: p.user_id as string, name: (p.name as string) || (p.email as string) || "Unknown", email: (p.email as string) || "",
       })));

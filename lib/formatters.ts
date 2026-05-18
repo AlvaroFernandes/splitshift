@@ -60,7 +60,7 @@ export async function downloadPdf(elementId: string, filename: string): Promise<
   const html2canvas = (await import("html2canvas")).default;
   const { jsPDF }   = await import("jspdf");
   const canvas = await html2canvas(element, {
-    scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false,
+    scale: 1.5, useCORS: true, backgroundColor: "#ffffff", logging: false,
   });
   const imgData = canvas.toDataURL("image/png");
   const pdf     = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });

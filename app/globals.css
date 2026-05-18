@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss/preflight";
 @import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 
 :root {
@@ -97,11 +97,11 @@
 .mt-4{margin-top:16px}
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .metric-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px}
-.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table{width:100%;border-collapse:collapse;font-size:13px;contain:paint}
 .data-table th{text-align:left;font-size:10px;font-weight:500;color:var(--color-text-tertiary);padding:6px 10px;border-bottom:0.5px solid var(--color-border-tertiary);white-space:nowrap;text-transform:uppercase;letter-spacing:.06em}
 .data-table td{padding:8px 10px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:middle}
 .data-table tr:last-child td{border-bottom:none}
-.data-table tr:hover td{background:var(--color-background-secondary)}
+.data-table tr:hover td{background-color:var(--color-background-secondary)}
 .mono{font-family:var(--font-mono)}
 .muted{color:var(--color-text-secondary)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
