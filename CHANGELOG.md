@@ -45,7 +45,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Performance
 
-- **Tailwind import narrowed** — `@import "tailwindcss"` → `@import "tailwindcss/preflight"` in `globals.css`; since no Tailwind utility classes are used anywhere in the app, the full import was triggering a full-codebase utility scan on every build with zero output. Importing only the preflight keeps the CSS reset while removing the dead scan pass.
+- **Tailwind import** — `@import "tailwindcss"` retained in `globals.css`; Turbopack resolves this as a PostCSS directive (handled by `@tailwindcss/postcss`), not as a JS module. Attempting to narrow it to `tailwindcss/preflight` caused a module resolution error at runtime.
 - **Table hover repaint scoped** — added `contain: paint` to `.data-table` so hover repaints are bounded to the table element and can't cause ancestor-level redraws; changed `background` shorthand → `background-color` on the hover rule (avoids resetting background-image/gradient/etc sub-properties that aren't set).
 - **SVG chart opacity unified** — replaced the mixed `opacity` presentation attribute (admin bars) / `style.opacity` (worker bars) / `style.opacity` (legend swatches) with a single `FILL_OPACITY` constant and the more semantically correct `fillOpacity` SVG attribute on all bar rects; `fillOpacity` affects only the fill channel, not the element itself, so no future text sibling placed inside a `<g>` can accidentally inherit it. Legend swatches remain consistent via the same constant.
 

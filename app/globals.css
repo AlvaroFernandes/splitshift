@@ -1,4 +1,4 @@
-@import "tailwindcss/preflight";
+@import "tailwindcss";
 @import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 
 :root {
