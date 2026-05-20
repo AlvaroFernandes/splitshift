@@ -274,11 +274,11 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
             </div>
             <div className="field">
               <label htmlFor="s-bsb">BSB</label>
-              <input id="s-bsb" type="text" placeholder="062-028" value={s.bsb} onChange={e => f("bsb", e.target.value)} />
+              <input id="s-bsb" type="text" placeholder="000-000" value={s.bsb} onChange={e => f("bsb", e.target.value)} />
             </div>
             <div className="field">
               <label htmlFor="s-acc">Account number</label>
-              <input id="s-acc" type="text" placeholder="1144-0435" value={s.accountNumber} onChange={e => f("accountNumber", e.target.value)} />
+              <input id="s-acc" type="text" placeholder="1111 1111" value={s.accountNumber} onChange={e => f("accountNumber", e.target.value)} />
             </div>
             <div className="field full">
               <label htmlFor="s-notes">Invoice notes</label>
