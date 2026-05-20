@@ -57,7 +57,7 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({ initialSe
         {/* Step 1 — Profile */}
         {step === 0 && (
           <>
-            <p style={{ fontWeight: 600, fontSize: 16, margin: "0 0 4px" }}>Welcome to SplitShift</p>
+            <p style={{ fontWeight: 600, fontSize: 16, margin: "0 0 4px" }}>Welcome to HourSplit</p>
             <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 20px" }}>
               Let's set up your profile in a few quick steps.
             </p>

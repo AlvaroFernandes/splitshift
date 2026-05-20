@@ -13,12 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SplitShift — Time & Earnings Tracker",
+  title: "HourSplit — Time & Earnings Tracker",
   description: "Track work hours, TFN salary, and ABN invoices",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "SplitShift",
+    title: "HourSplit",
   },
   formatDetection: { telephone: false },
   other: { "mobile-web-app-capable": "yes" },

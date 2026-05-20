@@ -1,8 +1,16 @@
 # Changelog
 
-All notable changes to SplitShift are documented here.
+All notable changes to HourSplit are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
+
+---
+
+## [0.5.40] - 2026-05-20
+
+### Changed
+
+- **App renamed to HourSplit** — all user-visible and internal references updated: page title, PWA manifest, login screen, app header, onboarding wizard, admin CSV export header and filename prefix, `package.json` name, seed data test emails and company name.
 
 ---
 
