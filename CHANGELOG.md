@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.41] - 2026-05-21
+
+### Changed
+
+- **Earnings chart x-axis labels** — bar labels now render on two lines: month (or day + month for weekly) on top, full 4-digit year below. Previously the monthly view showed a cramped "May 26" (2-digit year) and the weekly view showed "18 May" with no year at all.
+
+---
+
 ## [0.5.40] - 2026-05-20
 
 ### Changed

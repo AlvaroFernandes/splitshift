@@ -2,11 +2,18 @@ import React, { useMemo, useState } from "react";
 import type { ProcessedEntry } from "@/types";
 import { weekStart } from "@/lib/calculations";
 
-function barLabel(key: string, view: "week" | "month"): string {
+function barLabel(key: string, view: "week" | "month"): { line1: string; line2: string } {
   const d = new Date(key + "T00:00:00");
-  return view === "month"
-    ? d.toLocaleDateString("en-AU", { month: "short", year: "2-digit" })
-    : d.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  if (view === "month") {
+    return {
+      line1: d.toLocaleDateString("en-AU", { month: "short" }),
+      line2: String(d.getFullYear()),
+    };
+  }
+  return {
+    line1: d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
+    line2: String(d.getFullYear()),
+  };
 }
 
 function compact(n: number): string {
@@ -31,7 +38,7 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
     }
     return Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, v]) => ({ key, label: barLabel(key, view), ...v }));
+      .map(([key, v]) => ({ key, ...barLabel(key, view), ...v }));
   }, [processed, view]);
 
   if (bars.length === 0) return null;
@@ -113,9 +120,13 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
                   </text>
                 )}
 
-                <text x={x + BAR_W / 2} y={CHART_H + LABEL_H - 2} textAnchor="middle" fontSize={9}
+                <text x={x + BAR_W / 2} y={CHART_H + 11} textAnchor="middle" fontSize={9}
                   style={{ fill: "var(--color-text-tertiary)" }}>
-                  {b.label}
+                  {b.line1}
+                </text>
+                <text x={x + BAR_W / 2} y={CHART_H + 23} textAnchor="middle" fontSize={9}
+                  style={{ fill: "var(--color-text-tertiary)" }}>
+                  {b.line2}
                 </text>
               </g>
             );
