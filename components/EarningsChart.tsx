@@ -47,6 +47,7 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
   const FILL_OPACITY = 0.75;
   const BAR_W   = 42;
   const GAP     = 6;
+  const TOP_PAD = 18;
   const CHART_H = 120;
   const LABEL_H = 26;
   const svgW    = bars.length * (BAR_W + GAP) - GAP;
@@ -78,7 +79,7 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
       <div style={{ overflowX: "auto" }}>
         <svg
           width={Math.max(svgW, 280)}
-          height={CHART_H + LABEL_H}
+          height={TOP_PAD + CHART_H + LABEL_H}
           style={{ display: "block", overflow: "visible" }}
           role="img"
           aria-label="Earnings trend bar chart"
@@ -88,26 +89,26 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
             const totalH = Math.max(2, (b.total / maxTotal) * CHART_H);
             const tfnH   = isAdmin ? 0 : Math.max(0, (b.tfn / maxTotal) * CHART_H);
             const abnH   = isAdmin ? 0 : Math.max(0, (b.abn / maxTotal) * CHART_H);
-            const labelY = CHART_H - totalH - 5;
+            const labelY = TOP_PAD + CHART_H - totalH - 5;
 
             return (
               <g key={b.key}>
                 {isAdmin ? (
-                  <rect x={x} y={CHART_H - totalH} width={BAR_W} height={totalH} rx={3}
+                  <rect x={x} y={TOP_PAD + CHART_H - totalH} width={BAR_W} height={totalH} rx={3}
                     fill="var(--color-text-success)" fillOpacity={FILL_OPACITY} />
                 ) : (
                   <>
                     {tfnH > 0 && (
-                      <rect x={x} y={CHART_H - tfnH} width={BAR_W} height={tfnH}
+                      <rect x={x} y={TOP_PAD + CHART_H - tfnH} width={BAR_W} height={tfnH}
                         rx={abnH > 0 ? 0 : 3}
                         fill="var(--color-text-success)" fillOpacity={FILL_OPACITY} />
                     )}
                     {abnH > 0 && (
-                      <rect x={x} y={CHART_H - tfnH - abnH} width={BAR_W} height={abnH} rx={3}
+                      <rect x={x} y={TOP_PAD + CHART_H - tfnH - abnH} width={BAR_W} height={abnH} rx={3}
                         fill="var(--color-text-info)" fillOpacity={FILL_OPACITY} />
                     )}
                     {totalH <= 2 && (
-                      <rect x={x} y={CHART_H - 2} width={BAR_W} height={2} rx={1}
+                      <rect x={x} y={TOP_PAD + CHART_H - 2} width={BAR_W} height={2} rx={1}
                         fill="var(--color-border-secondary)" />
                     )}
                   </>
@@ -120,11 +121,11 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
                   </text>
                 )}
 
-                <text x={x + BAR_W / 2} y={CHART_H + 11} textAnchor="middle" fontSize={9}
+                <text x={x + BAR_W / 2} y={TOP_PAD + CHART_H + 11} textAnchor="middle" fontSize={9}
                   style={{ fill: "var(--color-text-tertiary)" }}>
                   {b.line1}
                 </text>
-                <text x={x + BAR_W / 2} y={CHART_H + 23} textAnchor="middle" fontSize={9}
+                <text x={x + BAR_W / 2} y={TOP_PAD + CHART_H + 23} textAnchor="middle" fontSize={9}
                   style={{ fill: "var(--color-text-tertiary)" }}>
                   {b.line2}
                 </text>

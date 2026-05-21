@@ -29,7 +29,7 @@ export default function WorkHoursTracker() {
     managedUsers,
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
-    processed, weeklyData, totals, tfnPct, TABS,
+    processed, weeklyData, totals, tfnPct, chartProcessed, TABS,
     toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
@@ -128,6 +128,7 @@ export default function WorkHoursTracker() {
       <main className="main-content">
         {tab === "dashboard" && (
           <Dashboard totals={totals} tfnPct={tfnPct} settings={settings} processed={processed}
+            chartProcessed={chartProcessed}
             isAdmin={userRole === "admin"} users={managedUsers}
             periodStart={periodStart} periodEnd={periodEnd} />
         )}

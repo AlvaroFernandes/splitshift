@@ -310,7 +310,7 @@ export function useAppData() {
   // when entries or the relevant settings actually change, not on every form
   // keystroke or editId update.
 
-  const { allPeriodEntries, processed, weeklyData, totals, tfnPct } = useMemo(() => {
+  const { allPeriodEntries, processed, weeklyData, totals, tfnPct, chartProcessed } = useMemo(() => {
     const allPeriodEntries = entries.filter(e =>
       (!periodStart || e.date >= periodStart) &&
       (!periodEnd   || e.date <= periodEnd)
@@ -342,6 +342,22 @@ export function useAppData() {
       allProcessed = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
     }
 
+    // Earnings chart: all entries across all time (no period filter, including archived)
+    let chartProcessed: ReturnType<typeof processEntries>;
+    if (userRole === "admin") {
+      const allWorkerIds = [...new Set(entries.map(e => e.ownerId).filter(Boolean))] as string[];
+      const chartParts: ReturnType<typeof processEntries> = [];
+      for (const uid of allWorkerIds) {
+        const ws = workerSettings[uid] ?? DEFAULT_SETTINGS;
+        const tfnRateParsed = parseFloat(ws.tfnRate || "") || undefined;
+        chartParts.push(...processEntries(entries.filter(e => e.ownerId === uid), ws.tfnLimit || 30, tfnRateParsed, ws.overtimeThreshold || 12));
+      }
+      chartProcessed = chartParts;
+    } else {
+      const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
+      chartProcessed = processEntries(entries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+    }
+
     // Weekly report: all entries visible, but active entries use current-period TFN/ABN budget
     const processedById = new Map(processed.map(e => [e.id, e]));
     const weeklyData    = allProcessed.map(e => processedById.get(e.id) ?? e);
@@ -367,7 +383,7 @@ export function useAppData() {
       const weekTfn = weekProc.reduce((s, e) => s + e.tfnPortion, 0);
       tfnPct = Math.min(100, (weekTfn / (settings.tfnLimit || 30)) * 100);
     }
-    return { allPeriodEntries, processed, weeklyData, totals, tfnPct };
+    return { allPeriodEntries, processed, weeklyData, totals, tfnPct, chartProcessed };
   }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, userRole, workerSettings]);
 
   const editEntry = useMemo(
@@ -591,7 +607,7 @@ export function useAppData() {
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
     // derived
-    processed, weeklyData, totals, tfnPct, TABS,
+    processed, weeklyData, totals, tfnPct, chartProcessed, TABS,
     // handlers
     toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,

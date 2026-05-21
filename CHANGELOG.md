@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.42] - 2026-05-21
+
+### Fixed
+
+- **Earnings chart value labels clipped at top** — added 18 px top padding to the chart SVG so labels above tall bars are no longer cut off by the container. Previously the tallest bar could push its label to a negative y-coordinate, causing it to be hidden.
+
+---
+
 ## [0.5.41] - 2026-05-21
 
 ### Changed

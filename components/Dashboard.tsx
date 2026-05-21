@@ -84,8 +84,8 @@ function downloadAdminCSV(
   URL.revokeObjectURL(url);
 }
 
-export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, settings, processed, isAdmin, users, periodStart, periodEnd }: {
-  totals: Totals; tfnPct: number; settings: Settings; processed: ProcessedEntry[];
+export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, settings, processed, chartProcessed, isAdmin, users, periodStart, periodEnd }: {
+  totals: Totals; tfnPct: number; settings: Settings; processed: ProcessedEntry[]; chartProcessed: ProcessedEntry[];
   isAdmin?: boolean; users?: ManagedUser[];
   periodStart?: string; periodEnd?: string;
 }) {
@@ -120,7 +120,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
           <Metric label="Users"          value={String(users.length)}  sub="managed" />
         </div>
 
-        <EarningsChart processed={processed} isAdmin />
+        <EarningsChart processed={chartProcessed} isAdmin />
 
         {userStats.length > 0 && (
           <div className="card mt-4" style={{ overflowX: "auto" }}>
@@ -199,7 +199,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
         <Metric label="Total earnings" value={fc(totals.total)}       bold />
       </div>
 
-      <EarningsChart processed={processed} />
+      <EarningsChart processed={chartProcessed} />
 
       {dates.length > 0 ? (
         <div className="card mt-4">
