@@ -6,6 +6,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.43] - 2026-05-21
+
+### Added
+
+- **Hour Bank profile mode** — users can now choose between two excess-hours modes in Settings → Work Rules:
+  - **ABN Invoice** (default) — hours beyond the weekly TFN limit are billed as an ABN invoice, unchanged from previous behaviour.
+  - **Hour Bank** — excess hours are banked (tracked but not invoiced). ABN earnings are zero; a "Hour Bank" metric replaces the ABN metric on the Dashboard. The ABN Invoice and Invoices tabs are hidden when this mode is active.
+- Admins can set the excess-hours mode per worker from Settings → Work Rules (new "Excess hours" dropdown column).
+- New `bank` badge type (purple) used in the Dashboard recent days table when Hour Bank mode is active.
+- Work Rules settings tab is now fully functional for non-admin users: TFN limit, overtime threshold and excess mode are all editable.
+
+---
+
 ## [0.5.42] - 2026-05-21
 
 ### Fixed

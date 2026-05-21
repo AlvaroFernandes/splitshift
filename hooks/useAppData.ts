@@ -287,12 +287,12 @@ export function useAppData() {
   }, [userId, periodStart, periodEnd]); // saveSettings/showToast/setSettings are stable
 
   const handleSaveWorkerRules = useCallback(async (
-    rules: { userId: string; tfnLimit: number; overtimeThreshold: number }[],
+    rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank" }[],
   ) => {
     const results = await Promise.all(
-      rules.map(({ userId: wid, tfnLimit, overtimeThreshold }) => {
+      rules.map(({ userId: wid, tfnLimit, overtimeThreshold, excessMode }) => {
         const existing = workerSettings[wid] ?? DEFAULT_SETTINGS;
-        const updated  = { ...existing, tfnLimit, overtimeThreshold };
+        const updated  = { ...existing, tfnLimit, overtimeThreshold, excessMode };
         setWorkerSettings(prev => ({ ...prev, [wid]: updated }));
         return saveWorkerSettingsSvc(supabase, wid, updated);
       })
@@ -331,15 +331,17 @@ export function useAppData() {
         const tfnRateParsed = parseFloat(ws.tfnRate || "") || undefined;
         const ot  = ws.overtimeThreshold || 12;
         const lim = ws.tfnLimit || 30;
-        procParts.push(   ...processEntries(periodEntries.filter(e => e.ownerId === uid),    lim, tfnRateParsed, ot));
-        allProcParts.push(...processEntries(allPeriodEntries.filter(e => e.ownerId === uid), lim, tfnRateParsed, ot));
+        const em = ws.excessMode ?? "abn";
+        procParts.push(   ...processEntries(periodEntries.filter(e => e.ownerId === uid),    lim, tfnRateParsed, ot, em));
+        allProcParts.push(...processEntries(allPeriodEntries.filter(e => e.ownerId === uid), lim, tfnRateParsed, ot, em));
       }
       processed   = procParts;
       allProcessed = allProcParts;
     } else {
       const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
-      processed    = processEntries(periodEntries,    settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
-      allProcessed = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+      const em = settings.excessMode ?? "abn";
+      processed    = processEntries(periodEntries,    settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, em);
+      allProcessed = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, em);
     }
 
     // Earnings chart: all entries across all time (no period filter, including archived)
@@ -350,12 +352,12 @@ export function useAppData() {
       for (const uid of allWorkerIds) {
         const ws = workerSettings[uid] ?? DEFAULT_SETTINGS;
         const tfnRateParsed = parseFloat(ws.tfnRate || "") || undefined;
-        chartParts.push(...processEntries(entries.filter(e => e.ownerId === uid), ws.tfnLimit || 30, tfnRateParsed, ws.overtimeThreshold || 12));
+        chartParts.push(...processEntries(entries.filter(e => e.ownerId === uid), ws.tfnLimit || 30, tfnRateParsed, ws.overtimeThreshold || 12, ws.excessMode ?? "abn"));
       }
       chartProcessed = chartParts;
     } else {
       const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
-      chartProcessed = processEntries(entries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12);
+      chartProcessed = processEntries(entries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, settings.excessMode ?? "abn");
     }
 
     // Weekly report: all entries visible, but active entries use current-period TFN/ABN budget
@@ -365,11 +367,12 @@ export function useAppData() {
       hours:       a.hours       + e.total,
       tfnHours:    a.tfnHours    + e.tfnPortion,
       abnHours:    a.abnHours    + e.abnPortion,
+      bankHours:   a.bankHours   + e.bankHours,
       otHours:     a.otHours     + e.overtime,
       tfnEarnings: a.tfnEarnings + e.tfnEarnings,
       abnEarnings: a.abnEarnings + e.abnEarnings,
       total:       a.total       + e.totalEarnings,
-    }), { hours: 0, tfnHours: 0, abnHours: 0, otHours: 0, tfnEarnings: 0, abnEarnings: 0, total: 0 });
+    }), { hours: 0, tfnHours: 0, abnHours: 0, bankHours: 0, otHours: 0, tfnEarnings: 0, abnEarnings: 0, total: 0 });
     // tfnPct: current week's TFN progress (period-independent, for the dashboard meter)
     let tfnPct = 0;
     if (userRole === "user") {
@@ -378,13 +381,13 @@ export function useAppData() {
       const tfnRateW = parseFloat(settings.tfnRate || "") || undefined;
       const weekProc = processEntries(
         entries.filter(e => !e.archived && e.date >= mon && e.date <= today),
-        settings.tfnLimit, tfnRateW, settings.overtimeThreshold || 12,
+        settings.tfnLimit, tfnRateW, settings.overtimeThreshold || 12, settings.excessMode ?? "abn",
       );
       const weekTfn = weekProc.reduce((s, e) => s + e.tfnPortion, 0);
       tfnPct = Math.min(100, (weekTfn / (settings.tfnLimit || 30)) * 100);
     }
     return { allPeriodEntries, processed, weeklyData, totals, tfnPct, chartProcessed };
-  }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, userRole, workerSettings]);
+  }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, settings.excessMode, userRole, workerSettings]);
 
   const editEntry = useMemo(
     () => (editId ? (entries.find(e => e.id === editId) ?? null) : null),
@@ -403,16 +406,19 @@ export function useAppData() {
       { id: "entries",   label: "Entries",      icon: "ti-list"             },
       { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
     ];
+    const isBank = settings.excessMode === "bank";
     return [
       { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
       { id: "log",       label: "Log Entry",    icon: "ti-clock-plus"       },
       { id: "entries",   label: "Entries",      icon: "ti-list"             },
       { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
       { id: "tfn",       label: "TFN Report",   icon: "ti-report"           },
-      { id: "abn",       label: "ABN Invoice",  icon: "ti-receipt"          },
-      { id: "history",   label: "Invoices",     icon: "ti-history"          },
+      ...(!isBank ? [
+        { id: "abn",     label: "ABN Invoice",  icon: "ti-receipt"          },
+        { id: "history", label: "Invoices",     icon: "ti-history"          },
+      ] : []),
     ];
-  }, [userRole]);
+  }, [userRole, settings.excessMode]);
 
   const clients = useMemo(() =>
     [...new Set(entries.map(e => e.client).filter(Boolean))].sort() as string[],

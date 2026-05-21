@@ -9,6 +9,7 @@
   --color-background-info: #dbeafe;
   --color-background-warning: #fef3c7;
   --color-background-danger: #fee2e2;
+  --color-background-bank: #f3e8ff;
 
   --color-border-secondary: #d1d5db;
   --color-border-tertiary: #e5e7eb;
@@ -22,6 +23,7 @@
   --color-text-info: #1d4ed8;
   --color-text-warning: #d97706;
   --color-text-danger: #dc2626;
+  --color-text-bank: #7c3aed;
 
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
@@ -38,6 +40,7 @@
     --color-background-info: #1e3a5f;
     --color-background-warning: #451a03;
     --color-background-danger: #450a0a;
+    --color-background-bank: #2e1065;
 
     --color-border-secondary: #374151;
     --color-border-tertiary: #2d2d2d;
@@ -51,6 +54,7 @@
     --color-text-info: #60a5fa;
     --color-text-warning: #fbbf24;
     --color-text-danger: #f87171;
+    --color-text-bank: #c4b5fd;
   }
 }
 
@@ -62,6 +66,7 @@
   --color-background-info: #1e3a5f;
   --color-background-warning: #451a03;
   --color-background-danger: #450a0a;
+  --color-background-bank: #2e1065;
 
   --color-border-secondary: #374151;
   --color-border-tertiary: #2d2d2d;
@@ -75,6 +80,7 @@
   --color-text-info: #60a5fa;
   --color-text-warning: #fbbf24;
   --color-text-danger: #f87171;
+  --color-text-bank: #c4b5fd;
 }
 
 /* ── App-shell styles ── */

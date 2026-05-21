@@ -190,12 +190,17 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
       <div className="metric-grid">
         <Metric label="Total hours"  value={fh(totals.hours)}    sub={`${processed.length} entries`}    />
         <Metric label="TFN hours"    value={fh(totals.tfnHours)} sub={`of ${settings.tfnLimit}h limit`} color="success" progress={tfnPct} />
-        <Metric label="ABN hours"    value={fh(totals.abnHours)} sub="invoiceable excess"                color="info"    />
+        {settings.excessMode === "bank"
+          ? <Metric label="Hour bank"  value={fh(totals.bankHours)} sub="accrued, not invoiced" color="info" />
+          : <Metric label="ABN hours"  value={fh(totals.abnHours)}  sub="invoiceable excess"    color="info" />
+        }
         <Metric label="Overtime"     value={fh(totals.otHours)}  sub="×1.5 rate applied"               color="warning" />
       </div>
       <div className="metric-grid mt-3">
         <Metric label="TFN earnings"   value={fc(totals.tfnEarnings)} color="success" />
-        <Metric label="ABN earnings"   value={fc(totals.abnEarnings)} color="info" />
+        {settings.excessMode !== "bank" && (
+          <Metric label="ABN earnings" value={fc(totals.abnEarnings)} color="info" />
+        )}
         <Metric label="Total earnings" value={fc(totals.total)}       bold />
       </div>
 
@@ -209,7 +214,9 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
               <thead>
                 <tr>
                   <th>Date</th><th>Jobs</th><th>Hours</th>
-                  <th>Overtime</th><th>TFN</th><th>ABN</th><th>Earnings</th>
+                  <th>Overtime</th><th>TFN</th>
+                  <th>{settings.excessMode === "bank" ? "Bank" : "ABN"}</th>
+                  <th>Earnings</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,17 +226,18 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
                     h:    a.h    + e.total,
                     ot:   a.ot   + e.overtime,
                     tfn:  a.tfn  + e.tfnPortion,
-                    abn:  a.abn  + e.abnPortion,
+                    abn:  a.abn  + (settings.excessMode === "bank" ? e.bankHours : e.abnPortion),
                     earn: a.earn + e.totalEarnings,
                   }), { h:0, ot:0, tfn:0, abn:0, earn:0 });
+                  const abnType = settings.excessMode === "bank" ? "bank" : "abn";
                   return (
                     <tr key={date}>
                       <td className="mono" style={{ fontSize: 12 }}>{fd(date)}</td>
                       <td>{de.length}</td>
                       <td className="mono">{fh(d.h)}</td>
-                      <td>{d.ot  > 0 ? <Bdg type="ot">{fh(d.ot)}</Bdg>   : <span className="muted">—</span>}</td>
-                      <td>{d.tfn > 0 ? <Bdg type="tfn">{fh(d.tfn)}</Bdg> : <span className="muted">—</span>}</td>
-                      <td>{d.abn > 0 ? <Bdg type="abn">{fh(d.abn)}</Bdg> : <span className="muted">—</span>}</td>
+                      <td>{d.ot  > 0 ? <Bdg type="ot">{fh(d.ot)}</Bdg>       : <span className="muted">—</span>}</td>
+                      <td>{d.tfn > 0 ? <Bdg type="tfn">{fh(d.tfn)}</Bdg>     : <span className="muted">—</span>}</td>
+                      <td>{d.abn > 0 ? <Bdg type={abnType}>{fh(d.abn)}</Bdg> : <span className="muted">—</span>}</td>
                       <td className="mono">{fc(d.earn)}</td>
                     </tr>
                   );

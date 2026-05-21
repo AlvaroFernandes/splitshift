@@ -7,6 +7,7 @@ interface WorkerRule {
   name: string;
   tfnLimit: number;
   overtimeThreshold: number;
+  excessMode: "abn" | "bank";
 }
 
 interface Props {
@@ -17,7 +18,7 @@ interface Props {
   managedAdmins?: ManagedUser[];
   managedViewers?: ManagedUser[];
   workerSettings?: Record<string, Settings>;
-  onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; overtimeThreshold: number }[]) => void;
+  onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank" }[]) => void;
   onInvite?: (email: string, role: "user" | "admin" | "viewer") => void;
 }
 
@@ -42,11 +43,13 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
         name:              u.name || u.email,
         tfnLimit:          workerSettings?.[u.id]?.tfnLimit          ?? 30,
         overtimeThreshold: workerSettings?.[u.id]?.overtimeThreshold ?? 12,
+        excessMode:       (workerSettings?.[u.id]?.excessMode        ?? "abn") as "abn" | "bank",
       }));
       if (prev.length === next.length &&
           prev.every((r, i) => r.userId === next[i].userId &&
                                r.tfnLimit === next[i].tfnLimit &&
-                               r.overtimeThreshold === next[i].overtimeThreshold))
+                               r.overtimeThreshold === next[i].overtimeThreshold &&
+                               r.excessMode === next[i].excessMode))
         return prev;
       return next;
     });
@@ -70,6 +73,9 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
 
   const updateRule = (userId: string, key: "tfnLimit" | "overtimeThreshold", val: number) =>
     setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, [key]: val } : r));
+
+  const updateRuleMode = (userId: string, val: "abn" | "bank") =>
+    setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, excessMode: val } : r));
 
   return (
     <div style={{ maxWidth: 600 }}>
@@ -218,6 +224,56 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
           </div>
         )}
 
+        {activeTab === "rules" && !isAdmin && (
+          <div className="form-grid">
+            <div className="field full">
+              <label htmlFor="s-tfnlimit">TFN hours per week</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input id="s-tfnlimit" type="number" min="1" step="1" value={s.tfnLimit} onChange={e => f("tfnLimit", parseFloat(e.target.value) || 30)} style={{ width: 100 }} />
+                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>hrs</span>
+              </div>
+            </div>
+            <div className="field full">
+              <label htmlFor="s-otthreshold">Daily overtime after</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input id="s-otthreshold" type="number" min="1" step="0.5" value={s.overtimeThreshold} onChange={e => f("overtimeThreshold", parseFloat(e.target.value) || 12)} style={{ width: 100 }} />
+                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>hrs</span>
+              </div>
+            </div>
+            <div className="field full">
+              <label>Excess hours mode</label>
+              <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", margin: "0 0 10px" }}>
+                What happens to hours beyond your weekly TFN limit.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["abn", "bank"] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setS(prev => ({ ...prev, excessMode: mode }))}
+                    style={{
+                      flex: 1, padding: "10px 14px", borderRadius: "var(--border-radius-md)",
+                      border: "0.5px solid " + ((s.excessMode ?? "abn") === mode ? "var(--color-text-info)" : "var(--color-border-secondary)"),
+                      background: (s.excessMode ?? "abn") === mode ? "var(--color-background-info)" : "var(--color-background-secondary)",
+                      color: (s.excessMode ?? "abn") === mode ? "var(--color-text-info)" : "var(--color-text-primary)",
+                      cursor: "pointer", textAlign: "left",
+                    }}
+                  >
+                    <div style={{ fontWeight: 500, fontSize: 13 }}>
+                      {mode === "abn" ? "ABN Invoice" : "Hour Bank"}
+                    </div>
+                    <div style={{ fontSize: 11, color: (s.excessMode ?? "abn") === mode ? "var(--color-text-info)" : "var(--color-text-tertiary)", marginTop: 3 }}>
+                      {mode === "abn"
+                        ? "Excess hours are billed as an ABN invoice"
+                        : "Excess hours are saved as a time bank — no invoice generated"}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "rules" && isAdmin && (
           <>
             <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 16 }}>
@@ -232,6 +288,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                     <th>Worker</th>
                     <th>TFN hour limit</th>
                     <th>Overtime after (hrs/day)</th>
+                    <th>Excess hours</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -257,6 +314,23 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                           aria-label={`Overtime threshold for ${r.name}`}
                         />
                         <span style={{ marginLeft: 6, fontSize: 12, color: "var(--color-text-secondary)" }}>hrs</span>
+                      </td>
+                      <td>
+                        <select
+                          value={r.excessMode}
+                          onChange={e => updateRuleMode(r.userId, e.target.value as "abn" | "bank")}
+                          aria-label={`Excess hours mode for ${r.name}`}
+                          style={{
+                            padding: "4px 8px", fontSize: 12,
+                            border: "0.5px solid var(--color-border-secondary)",
+                            borderRadius: "var(--border-radius-md)",
+                            background: "var(--color-background-secondary)",
+                            color: "var(--color-text-primary)",
+                          }}
+                        >
+                          <option value="abn">ABN Invoice</option>
+                          <option value="bank">Hour Bank</option>
+                        </select>
                       </td>
                     </tr>
                   ))}

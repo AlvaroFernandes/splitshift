@@ -33,11 +33,12 @@ export const Metric = React.memo(function Metric({ label, value, sub, color, pro
   );
 });
 
-export const Bdg = React.memo(function Bdg({ type, children }: { type: "tfn" | "abn" | "ot"; children: React.ReactNode }) {
+export const Bdg = React.memo(function Bdg({ type, children }: { type: "tfn" | "abn" | "ot" | "bank"; children: React.ReactNode }) {
   const s: Record<string, React.CSSProperties> = {
-    tfn: { background: "var(--color-background-success)", color: "var(--color-text-success)" },
-    abn: { background: "var(--color-background-info)",    color: "var(--color-text-info)"    },
-    ot:  { background: "var(--color-background-warning)", color: "var(--color-text-warning)" },
+    tfn:  { background: "var(--color-background-success)", color: "var(--color-text-success)" },
+    abn:  { background: "var(--color-background-info)",    color: "var(--color-text-info)"    },
+    ot:   { background: "var(--color-background-warning)", color: "var(--color-text-warning)" },
+    bank: { background: "var(--color-background-bank)",    color: "var(--color-text-bank)"    },
   };
   return (
     <span style={{ ...s[type], fontSize: 11, padding: "2px 6px", borderRadius: 4, fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>

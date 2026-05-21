@@ -25,6 +25,7 @@ export interface ProcessedEntry extends Entry {
   overtime: number;
   tfnPortion: number;
   abnPortion: number;
+  bankHours: number;
   rTFN: number;
   otTFN: number;
   rABN: number;
@@ -72,6 +73,7 @@ export interface Settings {
   invoiceNotes: string;
   tfnLimit: number;
   overtimeThreshold: number;
+  excessMode?: "abn" | "bank";
   pdfNamePattern: string;
   templates?: EntryTemplate[];
   reminderEnabled?: boolean;
@@ -84,6 +86,7 @@ export interface Totals {
   hours: number;
   tfnHours: number;
   abnHours: number;
+  bankHours: number;
   otHours: number;
   tfnEarnings: number;
   abnEarnings: number;

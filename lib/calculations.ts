@@ -34,6 +34,7 @@ export function processEntries(
   tfnLimit = 30,
   tfnRate?: number,
   overtimeThreshold = 12,
+  excessMode: "abn" | "bank" = "abn",
 ): ProcessedEntry[] {
   const sorted = [...entries].sort((a, b) => {
     const d = a.date.localeCompare(b.date);
@@ -64,14 +65,15 @@ export function processEntries(
     const abnR = entry.hourlyRate;
     const tR   = tfnRate ?? abnR;
     const tfnEarnings = rTFN * tR  + otTFN * tR  * 1.5;
-    const abnEarnings = rABN * abnR + otABN * abnR * 1.5;
+    const abnEarnings = excessMode === "bank" ? 0 : rABN * abnR + otABN * abnR * 1.5;
+    const bankHours   = excessMode === "bank" ? abnPortion : 0;
 
     weekRun += total;
 
     return {
       ...entry,
       total, regular, overtime,
-      tfnPortion, abnPortion,
+      tfnPortion, abnPortion, bankHours,
       rTFN, otTFN, rABN, otABN,
       tfnEarnings, abnEarnings,
       totalEarnings: tfnEarnings + abnEarnings,
