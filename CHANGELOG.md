@@ -6,6 +6,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.44] - 2026-05-23
+
+### Added
+
+- **Office hours flag on entries** — a checkbox on the Log Entry form (and admin edit modal) marks a shift as office hours. When set, the 4-hour minimum call rule is bypassed and only actual worked time is billed. The live earnings preview updates instantly to reflect this.
+- Migration `015_entries_office_hours.sql` adds an `office_hours boolean DEFAULT false` column to the `entries` table — run it in the Supabase SQL editor to activate persistence.
+
+---
+
 ## [0.5.43] - 2026-05-21
 
 ### Added

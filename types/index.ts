@@ -7,6 +7,7 @@ export interface Entry {
   hourlyRate: number;
   breakMins: number;
   archived?: boolean;
+  officeHours?: boolean;
   client?: string;
   ownerId?: string; // admin: the user_id who owns this entry
 }
@@ -101,6 +102,7 @@ export interface FormState {
   hourlyRate: string;
   breakMins: string;
   client: string;
+  officeHours?: boolean;
 }
 
 export interface Toast {

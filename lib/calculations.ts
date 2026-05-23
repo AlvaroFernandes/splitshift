@@ -49,7 +49,7 @@ export function processEntries(
     if (ew !== currentWeek) { weekRun = 0; currentWeek = ew; }
 
     const worked   = calcHours(entry.startTime, entry.endTime) - (entry.breakMins || 0) / 60;
-    const total    = Math.max(MIN_HOURS, worked);
+    const total    = entry.officeHours ? Math.max(0, worked) : Math.max(MIN_HOURS, worked);
 
     const regular  = Math.min(total, overtimeThreshold);
     const overtime = total - regular;

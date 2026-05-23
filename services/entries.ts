@@ -11,6 +11,7 @@ export function rowToEntry(row: Record<string, unknown>): Entry {
     hourlyRate:     Number(row.hourly_rate),
     breakMins:      Number(row.break_mins) || 0,
     archived:       !!(row.archived),
+    officeHours:    !!(row.office_hours),
     client:         (row.client as string) || undefined,
     ownerId:        row.user_id as string,
   };
@@ -27,6 +28,7 @@ export function entryToRow(entry: Entry, userId: string): Record<string, unknown
     hourly_rate:     entry.hourlyRate,
     break_mins:      entry.breakMins,
     archived:        entry.archived ?? false,
+    office_hours:    entry.officeHours ?? false,
     client:          entry.client?.trim() || null,
   };
 }

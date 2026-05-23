@@ -21,17 +21,18 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
           hourlyRate:     String(editEntry.hourlyRate),
           breakMins:      editEntry.breakMins ? String(editEntry.breakMins) : "",
           client:         editEntry.client ?? "",
+          officeHours:    editEntry.officeHours ?? false,
         }
-      : { date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" }
+      : { date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "", officeHours: false }
   );
 
   const { breakMinsNum, previewRaw, previewActual, previewH, previewEarn } = React.useMemo(() => {
     const breakMinsNum  = parseInt(form.breakMins || "0") || 0;
     const previewRaw    = calcHours(form.startTime, form.endTime);
     const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
-    const previewH      = Math.max(MIN_HOURS, previewActual);
+    const previewH      = form.officeHours ? previewActual : Math.max(MIN_HOURS, previewActual);
     return { breakMinsNum, previewRaw, previewActual, previewH, previewEarn: previewH * parseFloat(form.hourlyRate || "0") };
-  }, [form.breakMins, form.startTime, form.endTime, form.hourlyRate]);
+  }, [form.breakMins, form.startTime, form.endTime, form.hourlyRate, form.officeHours]);
 
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -54,7 +55,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
     const ok = await onSave(form);
     setIsSaving(false);
     if (ok && !editEntry) {
-      setForm(prev => ({ date: prev.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "" }));
+      setForm(prev => ({ date: prev.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "", officeHours: false }));
     }
   }, [form, onSave, editEntry, isSaving]);
 
@@ -124,6 +125,17 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
             <label htmlFor="f-break">Break (mins, unpaid)</label>
             <input id="f-break" type="number" min="0" step="5" placeholder="0" value={form.breakMins} onChange={e => f("breakMins", e.target.value)} />
           </div>
+          <div className="field full">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={form.officeHours === true}
+                onChange={() => setForm(prev => ({ ...prev, officeHours: !prev.officeHours }))}
+              />
+              Office hours
+              <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-text-tertiary)" }}>(no 4-hour minimum call — billed as worked)</span>
+            </label>
+          </div>
         </div>
 
         {previewRaw > 0 && (
@@ -134,7 +146,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
               {breakMinsNum > 0 && (
                 <span className="muted"> − {breakMinsNum}m break = <strong className="mono">{fh(previewActual)}</strong></span>
               )}
-              {previewActual < MIN_HOURS && (
+              {!form.officeHours && previewActual < MIN_HOURS && (
                 <span className="muted"> → billed <strong className="mono" style={{ color: "var(--color-text-warning)" }}>{fh(previewH)}</strong> (min. call)</span>
               )}
             </span>

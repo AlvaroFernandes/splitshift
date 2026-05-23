@@ -18,6 +18,7 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
     hourlyRate:     String(entry.hourlyRate),
     breakMins:      entry.breakMins ? String(entry.breakMins) : "",
     client:         entry.client || "",
+    officeHours:    entry.officeHours ?? false,
   });
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -25,9 +26,9 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
     const breakMinsNum  = Math.max(0, parseInt(form.breakMins || "0") || 0);
     const previewRaw    = calcHours(form.startTime, form.endTime);
     const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
-    const previewH      = Math.max(MIN_HOURS, previewActual);
+    const previewH      = form.officeHours ? previewActual : Math.max(MIN_HOURS, previewActual);
     return { breakMinsNum, previewRaw, previewActual, previewH, previewEarn: previewH * parseFloat(form.hourlyRate || "0") };
-  }, [form.breakMins, form.startTime, form.endTime, form.hourlyRate]);
+  }, [form.breakMins, form.startTime, form.endTime, form.hourlyRate, form.officeHours]);
 
   const handleSave = () => {
     if (!form.date || !form.jobDescription.trim() || !form.startTime || !form.endTime || !form.hourlyRate) return;
@@ -42,6 +43,7 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
       endTime:        form.endTime,
       hourlyRate:     hourlyRateNum,
       breakMins:      breakMinsNum,
+      officeHours:    form.officeHours ?? false,
       client:         form.client.trim() || undefined,
     });
   };
@@ -95,6 +97,17 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
                 {clients.map(c => <option key={c} value={c} />)}
               </datalist>
             )}
+          </div>
+          <div className="field full">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={form.officeHours === true}
+                onChange={() => setForm(prev => ({ ...prev, officeHours: !prev.officeHours }))}
+              />
+              Office hours
+              <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-text-tertiary)" }}>(no 4-hour minimum call)</span>
+            </label>
           </div>
         </div>
 
