@@ -1,6 +1,6 @@
 {
-  "name": "hoursplit",
-  "version": "0.5.44",
+  "name": "splitshift",
+  "version": "0.5.45",
   "private": true,
   "scripts": {
     "dev": "next dev",

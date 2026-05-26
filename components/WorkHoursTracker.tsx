@@ -54,7 +54,7 @@ export default function WorkHoursTracker() {
       <header className="header no-print">
         <div className="logo">
           <i className="ti ti-briefcase" aria-hidden="true" style={{ fontSize: 18, color: "var(--color-text-warning)" }} />
-          HourSplit
+          SplitShift
           {userRole === "admin" && (
             <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "var(--color-text-warning)", color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: "0.04em" }}>
               ADMIN

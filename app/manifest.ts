@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "HourSplit",
-    short_name: "HourSplit",
+    name: "SplitShift",
+    short_name: "SplitShift",
     description: "Track work hours, TFN salary, and ABN invoices",
     start_url: "/",
     display: "standalone",

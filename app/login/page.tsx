@@ -48,7 +48,7 @@ export default function LoginPage() {
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8 }}>
           <i className="ti ti-briefcase" style={{ fontSize: 24, color: "var(--color-text-warning)" }} />
-          <span style={{ fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)" }}>HourSplit</span>
+          <span style={{ fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)" }}>SplitShift</span>
         </div>
         <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 32 }}>
           Time &amp; earnings tracker

@@ -27,7 +27,7 @@ function downloadAdminCSV(
   const period = `${periodStart || "All time"} to ${periodEnd || "All time"}`;
 
   // — Summary section —
-  rows.push(`HourSplit — Admin Export`);
+  rows.push(`SplitShift — Admin Export`);
   rows.push(`Period,${period}`);
   rows.push(``);
   rows.push(`WORKER SUMMARY`);
@@ -79,7 +79,7 @@ function downloadAdminCSV(
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href     = url;
-  a.download = `hoursplit-${(periodStart || "all").replace(/-/g, "")}-${(periodEnd || "all").replace(/-/g, "")}.csv`;
+  a.download = `splitshift-${(periodStart || "all").replace(/-/g, "")}-${(periodEnd || "all").replace(/-/g, "")}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
