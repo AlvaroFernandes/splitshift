@@ -10,7 +10,22 @@ import type {
 import { calcHours, processEntries, weekStart } from "@/lib/calculations";
 import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, getAdminEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
-import { DEFAULT_SETTINGS, getSettings, getWorkerSettings, saveSettings as saveSettingsSvc, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
+import { DEFAULT_SETTINGS, getWorkerSettings, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
+
+async function fetchSettings(): Promise<{ settings: import("@/types").Settings; periodStart: string; periodEnd: string } | null> {
+  const res = await fetch("/api/settings");
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function persistSettings(settings: import("@/types").Settings, periodStart: string, periodEnd: string): Promise<boolean> {
+  const res = await fetch("/api/settings", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ settings, periodStart, periodEnd }),
+  });
+  return res.ok;
+}
 import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
 import { getInvoices, saveInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
 import { logActivity, getAuditLog } from "@/services/audit";
@@ -85,7 +100,7 @@ export function useAppData() {
         if (role === "admin") {
           const [team, settingsRow, log] = await Promise.all([
             getManagedTeam(supabase, user.id),
-            getSettings(supabase, user.id),
+            fetchSettings(),
             getAuditLog(supabase),
           ]);
           setManagedUsers(team.users);
@@ -109,7 +124,7 @@ export function useAppData() {
           if (!adminId) { setLoading(false); return; }
           const [team, settingsRow] = await Promise.all([
             getManagedTeam(supabase, adminId),
-            getSettings(supabase, user.id),
+            fetchSettings(),
           ]);
           setManagedUsers(team.users);
 
@@ -128,7 +143,7 @@ export function useAppData() {
         } else {
           const [fetchedEntries, settingsRow, invoices] = await Promise.all([
             getEntries(supabase, user.id),
-            getSettings(supabase, user.id),
+            fetchSettings(),
             getInvoices(supabase, user.id),
           ]);
           setEntries(fetchedEntries);
@@ -158,7 +173,7 @@ export function useAppData() {
       if (!settings.invoiceDate || settings.invoiceDate < today) {
         const s = { ...settings, invoiceDate: today };
         setSettings(s);
-        saveSettings(s, periodStart, periodEnd, userId);
+        saveSettings(s, periodStart, periodEnd);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,8 +200,8 @@ export function useAppData() {
 
   // supabase stable (useRef) — omitted from deps intentionally
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const saveSettings = useCallback(async (s: Settings, ps: string, pe: string, uid: string) => {
-    const ok = await saveSettingsSvc(supabase, uid, s, ps, pe);
+  const saveSettings = useCallback(async (s: Settings, ps: string, pe: string) => {
+    const ok = await persistSettings(s, ps, pe);
     if (!ok) showToast("Could not save settings", "err");
   }, [showToast]);
 
@@ -200,13 +215,13 @@ export function useAppData() {
     const ps = field === "start" ? val : periodStart;
     const pe = field === "end"   ? val : periodEnd;
     if (field === "start") setPeriodStart(ps); else setPeriodEnd(pe);
-    if (userId) saveSettings(settings, ps, pe, userId);
+    if (userId) saveSettings(settings, ps, pe);
   }, [periodStart, periodEnd, userId, settings]); // saveSettings is stable
 
   const clearPeriod = useCallback(() => {
     setPeriodStart("");
     setPeriodEnd("");
-    if (userId) saveSettings(settings, "", "", userId);
+    if (userId) saveSettings(settings, "", "");
   }, [userId, settings]); // saveSettings/setters are stable
 
   const handleSave = useCallback(async (formData: FormState): Promise<boolean> => {
@@ -287,7 +302,7 @@ export function useAppData() {
 
   const handleSettingsSave = useCallback((s: Settings) => {
     setSettings(s);
-    if (userId) saveSettings(s, periodStart, periodEnd, userId);
+    if (userId) saveSettings(s, periodStart, periodEnd);
     showToast("Settings saved");
   }, [userId, periodStart, periodEnd]); // saveSettings/showToast/setSettings are stable
 
@@ -518,7 +533,7 @@ export function useAppData() {
 
     const s = { ...settings, invoiceNum: (settings.invoiceNum || 1) + 1, invoiceDate: todayStr(), invoiceItems: [] };
     setSettings(s);
-    if (userId) saveSettings(s, periodStart, periodEnd, userId);
+    if (userId) saveSettings(s, periodStart, periodEnd);
     showToast(`Invoice #${settings.invoiceNum} saved`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, processed, allPeriodEntries, userId, periodStart, periodEnd]); // supabase/showToast/setters stable
@@ -532,7 +547,7 @@ export function useAppData() {
   const handleCompleteOnboarding = useCallback((partial: Partial<Settings>) => {
     const s = { ...settings, ...partial, onboardingCompleted: true };
     setSettings(s);
-    if (userId) saveSettings(s, periodStart, periodEnd, userId);
+    if (userId) saveSettings(s, periodStart, periodEnd);
   }, [settings, userId, periodStart, periodEnd]); // saveSettings/setSettings are stable
 
   const { showReminder, reminderDaysSince } = useMemo(() => {
@@ -564,7 +579,7 @@ export function useAppData() {
     };
     const s = { ...settings, templates: [...(settings.templates ?? []), template] };
     setSettings(s);
-    if (userId) saveSettings(s, periodStart, periodEnd, userId);
+    if (userId) saveSettings(s, periodStart, periodEnd);
     showToast("Template saved");
   }, [settings, userId, periodStart, periodEnd]); // formData is a param; showToast/saveSettings/setSettings are stable
 
@@ -599,7 +614,7 @@ export function useAppData() {
   const updateInvoiceItems = useCallback((items: Settings["invoiceItems"]) => {
     const s = { ...settings, invoiceItems: items };
     setSettings(s);
-    if (userId) saveSettings(s, periodStart, periodEnd, userId);
+    if (userId) saveSettings(s, periodStart, periodEnd);
   }, [settings, userId, periodStart, periodEnd]); // saveSettings/setSettings are stable
 
   return {
