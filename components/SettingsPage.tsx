@@ -57,8 +57,8 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
 
   const STABS = [
     ...(isAdmin ? [] : [{ id: "personal" as const, label: "Personal",   icon: "ti-user"        }]),
-    { id: "rules" as const, label: "Work Rules", icon: "ti-adjustments" },
-    ...(isAdmin ? [{ id: "team" as const, label: "Team", icon: "ti-users" }] : []),
+    ...(isAdmin ? [{ id: "rules"   as const, label: "Work Rules", icon: "ti-adjustments" }] : []),
+    ...(isAdmin ? [{ id: "team"    as const, label: "Team",       icon: "ti-users"       }] : []),
     ...(isAdmin ? [] : [{ id: "payment"  as const, label: "Payment",    icon: "ti-credit-card" }]),
   ];
 
@@ -198,56 +198,6 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "rules" && !isAdmin && (
-          <div className="form-grid">
-            <div className="field full">
-              <label htmlFor="s-tfnlimit">TFN hours per week</label>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input id="s-tfnlimit" type="number" min="1" step="1" value={s.tfnLimit} onChange={e => f("tfnLimit", parseFloat(e.target.value) || 30)} style={{ width: 100 }} />
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>hrs</span>
-              </div>
-            </div>
-            <div className="field full">
-              <label htmlFor="s-otthreshold">Daily overtime after</label>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input id="s-otthreshold" type="number" min="1" step="0.5" value={s.overtimeThreshold} onChange={e => f("overtimeThreshold", parseFloat(e.target.value) || 12)} style={{ width: 100 }} />
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>hrs</span>
-              </div>
-            </div>
-            <div className="field full">
-              <label>Excess hours mode</label>
-              <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", margin: "0 0 10px" }}>
-                What happens to hours beyond your weekly TFN limit.
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["abn", "bank"] as const).map(mode => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setS(prev => ({ ...prev, excessMode: mode }))}
-                    style={{
-                      flex: 1, padding: "10px 14px", borderRadius: "var(--border-radius-md)",
-                      border: "0.5px solid " + ((s.excessMode ?? "abn") === mode ? "var(--color-text-info)" : "var(--color-border-secondary)"),
-                      background: (s.excessMode ?? "abn") === mode ? "var(--color-background-info)" : "var(--color-background-secondary)",
-                      color: (s.excessMode ?? "abn") === mode ? "var(--color-text-info)" : "var(--color-text-primary)",
-                      cursor: "pointer", textAlign: "left",
-                    }}
-                  >
-                    <div style={{ fontWeight: 500, fontSize: 13 }}>
-                      {mode === "abn" ? "ABN Invoice" : "Hour Bank"}
-                    </div>
-                    <div style={{ fontSize: 11, color: (s.excessMode ?? "abn") === mode ? "var(--color-text-info)" : "var(--color-text-tertiary)", marginTop: 3 }}>
-                      {mode === "abn"
-                        ? "Excess hours are billed as an ABN invoice"
-                        : "Excess hours are saved as a time bank — no invoice generated"}
-                    </div>
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         )}
@@ -439,11 +389,11 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
         )}
 
         <div className="btn-row" style={{ marginTop: 18 }}>
-          {activeTab === "rules" && isAdmin ? (
+          {isAdmin && activeTab === "rules" ? (
             <button className="btn-primary" onClick={() => onSaveWorkerRules?.(workerRules)}>
               <i className="ti ti-check" aria-hidden="true" /> Save Worker Rules
             </button>
-          ) : !isAdmin ? (
+          ) : !isAdmin && activeTab !== "team" ? (
             <button className="btn-primary" onClick={() => onSave(s)}>
               <i className="ti ti-check" aria-hidden="true" /> Save Settings
             </button>
