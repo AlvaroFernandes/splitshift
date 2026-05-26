@@ -445,11 +445,11 @@ export function useAppData() {
   [entries]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handleInvite = useCallback(async (email: string, role: "user" | "admin" | "viewer") => {
+  const handleInvite = useCallback(async (email: string, role: "user" | "admin" | "viewer", name?: string) => {
     const res = await fetch("/api/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, role, name }),
     });
     const json = await res.json();
     if (!res.ok) { showToast(json.error ?? "Could not send invitation", "err"); return; }

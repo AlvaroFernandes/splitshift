@@ -20,12 +20,13 @@ interface Props {
   managedViewers?: ManagedUser[];
   workerSettings?: Record<string, Settings>;
   onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank" }[]) => void;
-  onInvite?: (email: string, role: "user" | "admin" | "viewer") => void;
+  onInvite?: (email: string, role: "user" | "admin" | "viewer", name?: string) => void;
 }
 
 export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedAdmins, managedViewers, workerSettings, onSaveWorkerRules, onInvite }: Props) {
   const [s, setS] = useState<Settings>({ ...DEFAULT_SETTINGS, ...settings });
   const [workerRules,    setWorkerRules]    = useState<WorkerRule[]>([]);
+  const [inviteName,     setInviteName]     = useState("");
   const [inviteEmail,    setInviteEmail]    = useState("");
   const [inviteRole,     setInviteRole]     = useState<"user" | "admin" | "viewer">("user");
   const [inviteSending,  setInviteSending]  = useState(false);
@@ -347,14 +348,20 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                 e.preventDefault();
                 if (!inviteEmail || inviteSending) return;
                 setInviteSending(true);
-                await onInvite?.(inviteEmail, inviteRole);
+                await onInvite?.(inviteEmail, inviteRole, inviteName);
+                setInviteName("");
                 setInviteEmail("");
                 setInviteSending(false);
               }}
               style={{ display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap" }}
             >
               <input
-                type="email" required placeholder="colleague@example.com"
+                type="text" placeholder="Employee name"
+                value={inviteName} onChange={e => setInviteName(e.target.value)}
+                style={{ flex: 1, minWidth: 160 }}
+              />
+              <input
+                type="email" required placeholder="Email address"
                 value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                 style={{ flex: 1, minWidth: 200 }}
               />

@@ -3,9 +3,10 @@ import { createClient as createServerClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 
 export async function POST(request: NextRequest) {
-  const body = await request.json() as { email?: string; role?: string };
+  const body = await request.json() as { email?: string; role?: string; name?: string };
   const email = body.email?.trim().toLowerCase();
   const role  = body.role;
+  const name  = body.name?.trim() || "";
 
   if (!email || !["user", "admin", "viewer"].includes(role ?? "")) {
     return NextResponse.json({ error: "email and role (user|admin|viewer) are required" }, { status: 400 });
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin") ?? "http://localhost:3000";
   const admin  = createAdminClient();
 
-  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+  const { data: inviteData, error } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${origin}/auth/confirm`,
     data: {
       invited_role: role,
@@ -42,6 +43,14 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  // Store the name on the profile immediately after the auth user is created.
+  if (name && inviteData?.user?.id) {
+    await admin.from("profiles").upsert(
+      { user_id: inviteData.user.id, name, email, role, admin_id: rootAdminId },
+      { onConflict: "user_id" },
+    );
   }
 
   return NextResponse.json({ ok: true });
