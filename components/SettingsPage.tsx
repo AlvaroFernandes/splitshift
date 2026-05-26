@@ -30,7 +30,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
   const [inviteSending,  setInviteSending]  = useState(false);
 
   const defaultTab = isAdmin ? "rules" : "personal";
-  const [activeTab, setActiveTab] = useState<"personal" | "company" | "rules" | "team" | "payment">(defaultTab as "personal" | "company" | "rules" | "team" | "payment");
+  const [activeTab, setActiveTab] = useState<"personal" | "rules" | "team" | "payment">(defaultTab as "personal" | "rules" | "team" | "payment");
 
   const f = (k: keyof Settings, v: string | number) => setS(prev => ({ ...prev, [k]: v }));
 
@@ -57,7 +57,6 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
 
   const STABS = [
     ...(isAdmin ? [] : [{ id: "personal" as const, label: "Personal",   icon: "ti-user"        }]),
-    ...(isAdmin ? [] : [{ id: "company"  as const, label: "Company",    icon: "ti-building"    }]),
     { id: "rules" as const, label: "Work Rules", icon: "ti-adjustments" },
     ...(isAdmin ? [{ id: "team" as const, label: "Team", icon: "ti-users" }] : []),
     ...(isAdmin ? [] : [{ id: "payment"  as const, label: "Payment",    icon: "ti-credit-card" }]),
@@ -199,27 +198,6 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "company" && (
-          <div className="form-grid">
-            <div className="field full">
-              <label htmlFor="s-cname">Company name</label>
-              <input id="s-cname" type="text" value={s.companyName} onChange={e => f("companyName", e.target.value)} />
-            </div>
-            <div className="field full">
-              <label htmlFor="s-cabn">Company ABN</label>
-              <input id="s-cabn" type="text" placeholder="12 345 678 901" value={s.companyAbn} onChange={e => f("companyAbn", e.target.value)} />
-            </div>
-            <div className="field full">
-              <label htmlFor="s-cemail">Company email</label>
-              <input id="s-cemail" type="email" value={s.companyEmail} onChange={e => f("companyEmail", e.target.value)} />
-            </div>
-            <div className="field full">
-              <label htmlFor="s-caddr">Company address</label>
-              {ta("s-caddr", "companyAddress", "Street, City, State, Postcode")}
             </div>
           </div>
         )}
