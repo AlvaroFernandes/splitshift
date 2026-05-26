@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type { EntryTemplate, ManagedUser, Settings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/services/settings";
+import { createClient } from "@/lib/supabase";
 
 interface WorkerRule {
   userId: string;
@@ -28,6 +29,10 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
   const [inviteEmail,    setInviteEmail]    = useState("");
   const [inviteRole,     setInviteRole]     = useState<"user" | "admin" | "viewer">("user");
   const [inviteSending,  setInviteSending]  = useState(false);
+  const [newPwd,         setNewPwd]         = useState("");
+  const [confirmPwd,     setConfirmPwd]     = useState("");
+  const [pwdLoading,     setPwdLoading]     = useState(false);
+  const [pwdMsg,         setPwdMsg]         = useState<{ text: string; ok: boolean } | null>(null);
 
   const defaultTab = isAdmin ? "rules" : "personal";
   const [activeTab, setActiveTab] = useState<"personal" | "rules" | "team" | "payment">(defaultTab as "personal" | "rules" | "team" | "payment");
@@ -198,6 +203,48 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                   ))}
                 </div>
               )}
+            </div>
+            <div className="field full" style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 16, marginTop: 4 }}>
+              <label>Change password</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+                <input
+                  type="password"
+                  placeholder="New password"
+                  value={newPwd}
+                  onChange={e => { setNewPwd(e.target.value); setPwdMsg(null); }}
+                  style={{ maxWidth: 280 }}
+                />
+                <input
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmPwd}
+                  onChange={e => { setConfirmPwd(e.target.value); setPwdMsg(null); }}
+                  style={{ maxWidth: 280 }}
+                />
+                {pwdMsg && (
+                  <p style={{ fontSize: 12, margin: 0, color: pwdMsg.ok ? "var(--color-text-success)" : "var(--color-text-danger)" }}>
+                    {pwdMsg.text}
+                  </p>
+                )}
+                <div>
+                  <button
+                    className="btn-primary"
+                    disabled={pwdLoading || !newPwd || !confirmPwd}
+                    onClick={async () => {
+                      if (newPwd !== confirmPwd) { setPwdMsg({ text: "Passwords do not match.", ok: false }); return; }
+                      if (newPwd.length < 8)     { setPwdMsg({ text: "Password must be at least 8 characters.", ok: false }); return; }
+                      setPwdLoading(true);
+                      const { error } = await createClient().auth.updateUser({ password: newPwd });
+                      setPwdLoading(false);
+                      if (error) { setPwdMsg({ text: error.message, ok: false }); }
+                      else       { setPwdMsg({ text: "Password updated.", ok: true }); setNewPwd(""); setConfirmPwd(""); }
+                    }}
+                  >
+                    <i className="ti ti-lock" aria-hidden="true" />
+                    {pwdLoading ? "Saving…" : "Update password"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
