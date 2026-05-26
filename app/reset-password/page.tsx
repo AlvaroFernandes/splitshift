@@ -1,34 +1,29 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
-function LoginForm() {
-  const supabase     = createClient();
-  const router       = useRouter();
-  const searchParams = useSearchParams();
-  const urlError     = searchParams.get("error");
+export default function ResetPasswordPage() {
+  const supabase = createClient();
+  const router   = useRouter();
 
-  const [email,    setEmail]    = useState("");
-  const [password, setPassword] = useState("");
-  const [error,    setError]    = useState("");
-  const [loading,  setLoading]  = useState(false);
+  const [password,  setPassword]  = useState("");
+  const [confirm,   setConfirm]   = useState("");
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState("");
 
-  const signInWithEmail = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (password !== confirm) { setError("Passwords do not match."); return; }
+    if (password.length < 8)  { setError("Password must be at least 8 characters."); return; }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) { setError(error.message); return; }
     router.push("/");
   };
-
-  const bannerMessage =
-    urlError === "not_invited"   ? "Access restricted. You need an invitation to use SplitShift." :
-    urlError === "invalid_link"  ? "That invite link is invalid or has expired. Please request a new one." :
-    null;
 
   return (
     <div style={{
@@ -50,22 +45,16 @@ function LoginForm() {
           <i className="ti ti-briefcase" style={{ fontSize: 24, color: "var(--color-text-warning)" }} />
           <span style={{ fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)" }}>SplitShift</span>
         </div>
-        <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 32 }}>
-          Time &amp; earnings tracker
+        <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "4px 0 28px" }}>
+          Choose a new password.
         </p>
 
-        {bannerMessage && (
-          <p style={{ fontSize: 13, color: "var(--color-text-danger)", marginBottom: 20, padding: "10px 12px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", textAlign: "left" }}>
-            {bannerMessage}
-          </p>
-        )}
-
-        <form onSubmit={signInWithEmail} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
+            type="password"
+            placeholder="New password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
             required
             style={{
               width: "100%",
@@ -81,9 +70,9 @@ function LoginForm() {
           />
           <input
             type="password"
-            placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
+            placeholder="Confirm new password"
+            value={confirm}
+            onChange={e => setConfirm(e.target.value)}
             required
             style={{
               width: "100%",
@@ -119,21 +108,10 @@ function LoginForm() {
               transition: "opacity 0.15s",
             }}
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Saving…" : "Set new password"}
           </button>
         </form>
-        <a href="/forgot-password" style={{ display: "block", marginTop: 16, fontSize: 13, color: "var(--color-text-secondary)", textDecoration: "none" }}>
-          Forgot password?
-        </a>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense>
-      <LoginForm />
-    </Suspense>
   );
 }

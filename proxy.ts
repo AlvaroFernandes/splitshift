@@ -33,7 +33,7 @@ export async function proxy(request: NextRequest) {
     if (!uuidV4.test(token)) return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (!user && !pathname.startsWith("/login") && !pathname.startsWith("/auth/confirm") && !pathname.startsWith("/invoice/")) {
+  if (!user && !pathname.startsWith("/login") && !pathname.startsWith("/auth/confirm") && !pathname.startsWith("/invoice/") && !pathname.startsWith("/forgot-password") && !pathname.startsWith("/reset-password")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
