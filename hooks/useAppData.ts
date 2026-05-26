@@ -72,7 +72,12 @@ export function useAppData() {
         if (!user) { router.push("/login"); return; }
         setUserId(user.id);
 
-        await ensureProfile(supabase, user.id, user.email);
+        const invited = await ensureProfile(supabase, user.id, user.email);
+        if (!invited) {
+          await supabase.auth.signOut();
+          router.push("/login?error=not_invited");
+          return;
+        }
 
         const { role, adminId } = await getProfile(supabase, user.id);
         setUserRole(role);

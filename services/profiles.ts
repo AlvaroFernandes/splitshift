@@ -1,11 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ManagedUser, UserRole } from "@/types";
 
-export async function ensureProfile(supabase: SupabaseClient, userId: string, email: string | undefined): Promise<void> {
-  await supabase.from("profiles").upsert(
-    { user_id: userId, email },
-    { onConflict: "user_id", ignoreDuplicates: true },
-  );
+// Returns false if no profile exists (user was not invited).
+// Never creates a new profile — only updates email on an existing one.
+export async function ensureProfile(supabase: SupabaseClient, userId: string, email: string | undefined): Promise<boolean> {
+  const { data } = await supabase
+    .from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
+  if (!data) return false;
+  if (email) await supabase.from("profiles").update({ email }).eq("user_id", userId);
+  return true;
 }
 
 export async function getProfile(supabase: SupabaseClient, userId: string): Promise<{ role: UserRole; adminId: string | null }> {
