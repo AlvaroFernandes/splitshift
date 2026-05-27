@@ -115,9 +115,8 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
       <div>
         <h2 className="sr-only">Admin dashboard</h2>
         <div className="metric-grid">
-          <Metric label="Total hours"    value={fh(totals.hours)}      sub={`${processed.length} entries`} />
-          <Metric label="Total earnings" value={fc(totals.total)}       bold />
-          <Metric label="Users"          value={String(users.length)}  sub="managed" />
+          <Metric label="Total hours" value={fh(totals.hours)}     sub={`${processed.length} entries`} />
+          <Metric label="Users"       value={String(users.length)} sub="managed" />
         </div>
 
         <EarningsChart processed={chartProcessed} isAdmin />
