@@ -16,8 +16,6 @@ function ConfirmHandler() {
       !rawNext.includes("://")
         ? rawNext
         : "/";
-    const token_hash = searchParams.get("token_hash");
-    const type = searchParams.get("type");
 
     let redirected = false;
     const doRedirect = (path: string) => {
@@ -26,13 +24,12 @@ function ConfirmHandler() {
       router.replace(path);
     };
 
-    // PKCE flow (password reset) — token_hash is in the query string
+    // 1. PKCE – token_hash + type in query params (password reset emails)
+    const token_hash = searchParams.get("token_hash");
+    const type = searchParams.get("type");
     if (token_hash && type) {
       supabase.auth
-        .verifyOtp({
-          token_hash,
-          type: type as "invite" | "signup" | "recovery" | "email",
-        })
+        .verifyOtp({ token_hash, type: type as "invite" | "signup" | "recovery" | "email" })
         .then(({ error }) =>
           error
             ? doRedirect("/login?error=invalid_link")
@@ -41,30 +38,47 @@ function ConfirmHandler() {
       return;
     }
 
-    // Implicit flow (invite) — session arrives in the URL hash; the Supabase
-    // browser client parses it automatically and fires onAuthStateChange.
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (
-        session &&
-        ["SIGNED_IN", "USER_UPDATED", "PASSWORD_RECOVERY"].includes(event)
-      ) {
+    // 2. PKCE – code in query params (invite emails when PKCE is enabled)
+    const code = searchParams.get("code");
+    if (code) {
+      supabase.auth
+        .exchangeCodeForSession(code)
+        .then(({ error }) =>
+          error ? doRedirect("/login?error=invalid_link") : doRedirect(next),
+        );
+      return;
+    }
+
+    // 3. Implicit flow – access_token + refresh_token in the URL hash.
+    //    @supabase/ssr does not reliably auto-parse hashes, so read it manually.
+    const hash = window.location.hash.slice(1);
+    const hp = new URLSearchParams(hash);
+    const access_token = hp.get("access_token");
+    const refresh_token = hp.get("refresh_token");
+    const hashType = hp.get("type");
+
+    if (access_token && refresh_token) {
+      supabase.auth
+        .setSession({ access_token, refresh_token })
+        .then(({ data, error }) => {
+          if (error || !data.session) return doRedirect("/login?error=invalid_link");
+          doRedirect(hashType === "recovery" ? "/reset-password" : next);
+        });
+      return;
+    }
+
+    // 4. Fallback – let the Supabase client auto-detect whatever it can
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && ["SIGNED_IN", "USER_UPDATED", "PASSWORD_RECOVERY"].includes(event)) {
         doRedirect(event === "PASSWORD_RECOVERY" ? "/reset-password" : next);
       }
     });
 
-    // In case the session was already parsed before the listener attached
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) doRedirect(next);
     });
 
-    // Give up after 8 s if no session materialises
-    const fallback = setTimeout(
-      () => doRedirect("/login?error=invalid_link"),
-      8000,
-    );
-
+    const fallback = setTimeout(() => doRedirect("/login?error=invalid_link"), 8000);
     return () => {
       subscription.unsubscribe();
       clearTimeout(fallback);
@@ -80,8 +94,7 @@ function ConfirmHandler() {
         alignItems: "center",
         justifyContent: "center",
         gap: "16px",
-        fontFamily:
-          "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",
+        fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",
         color: "#71717a",
       }}
     >
