@@ -643,7 +643,8 @@ export function useAppData() {
     advanceInvoice, handleDeleteInvoice, handleShareInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
-    showOnboarding: !loading && userRole === "user" && !settings.onboardingCompleted && !settings.yourName,
+    showOnboarding: !loading && !settings.onboardingCompleted &&
+      ((userRole === "user" && !settings.yourName) || userRole === "admin"),
     managedViewers,
     handleCompleteOnboarding,
     auditLog,

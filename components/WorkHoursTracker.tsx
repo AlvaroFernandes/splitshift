@@ -183,6 +183,7 @@ export default function WorkHoursTracker() {
           initialSettings={settings}
           onComplete={handleCompleteOnboarding}
           onSkip={() => handleCompleteOnboarding({})}
+          isAdmin={userRole === "admin"}
         />
       )}
 
