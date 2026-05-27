@@ -3,8 +3,9 @@ import type { ProcessedEntry, Settings, InvoiceItem, InvLineRow } from "@/types"
 import { fdInv, todayStr, genId, buildPdfFilename, downloadPdf } from "@/lib/formatters";
 import { weekStart } from "@/lib/calculations";
 
-export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, onAdvance, onItemsChange }: {
+export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, adminCompanyInfo, onAdvance, onItemsChange }: {
   processed: ProcessedEntry[]; settings: Settings;
+  adminCompanyInfo?: { companyName: string; companyAbn: string; companyAddress: string; companyEmail: string } | null;
   periodStart: string; periodEnd: string; onAdvance: () => void;
   onItemsChange: (items: InvoiceItem[]) => void;
 }) {
@@ -58,10 +59,11 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, 
       <div className="print-actions no-print">
         <button className="btn-secondary" disabled={downloading} onClick={async () => {
           setDownloading(true);
+          const co = adminCompanyInfo ?? { companyName: "", companyAbn: "", companyAddress: "", companyEmail: "" };
           const filename = buildPdfFilename(
             settings.pdfNamePattern,
             settings.invoiceNum,
-            settings.companyName,
+            co.companyName || settings.companyName,
             settings.invoiceDate || todayStr(),
           );
           await downloadPdf("abn-invoice-doc", filename);
@@ -129,7 +131,7 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, 
               </div>
               <div className="field" style={{ flex: 1, minWidth: 180 }}>
                 <label htmlFor="ei-desc">Description</label>
-                <input id="ei-desc" type="text" placeholder="e.g. Parking, License4Work fee" value={newDesc}
+                <input id="ei-desc" type="text" placeholder="e.g. Parking, tools, fuel, etc." value={newDesc}
                   onChange={e => { setNewDesc(e.target.value); setAddError(null); }} onKeyDown={e => e.key === "Enter" && addItem()} />
               </div>
               <div className="field" style={{ width: 130 }}>
@@ -161,9 +163,19 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, 
               <div className="inv-title-col">
                 <h1 className="inv-title">TAX INVOICE #{invNum}</h1>
                 <div style={{ marginTop: 14, lineHeight: 1.55 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>Invoice to: {settings.companyName || "Company Name"}</div>
-                  {settings.companyAbn   && <div>ABN: {settings.companyAbn}</div>}
-                  {settings.companyEmail && <div>Email: {settings.companyEmail}</div>}
+                  {(() => {
+                    const co = adminCompanyInfo ?? { companyName: "", companyAbn: "", companyAddress: "", companyEmail: "" };
+                    const name    = co.companyName    || settings.companyName;
+                    const abn     = co.companyAbn     || settings.companyAbn;
+                    const address = co.companyAddress || settings.companyAddress;
+                    const email   = co.companyEmail   || settings.companyEmail;
+                    return (<>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>Invoice to: {name || "Company Name"}</div>
+                      {abn     && <div>ABN: {abn}</div>}
+                      {address && <div>{address}</div>}
+                      {email   && <div>Email: {email}</div>}
+                    </>);
+                  })()}
                 </div>
                 <div style={{ marginTop: 10 }}>
                   <strong>Issue date: </strong>{fdInv(settings.invoiceDate || todayStr())}

@@ -35,8 +35,8 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
   const [pwdLoading,     setPwdLoading]     = useState(false);
   const [pwdMsg,         setPwdMsg]         = useState<{ text: string; ok: boolean } | null>(null);
 
-  const defaultTab = isAdmin ? "rules" : "personal";
-  const [activeTab, setActiveTab] = useState<"personal" | "rules" | "team" | "payment">(defaultTab as "personal" | "rules" | "team" | "payment");
+  const defaultTab = isAdmin ? "company" : "personal";
+  const [activeTab, setActiveTab] = useState<"personal" | "rules" | "team" | "payment" | "company">(defaultTab as "personal" | "rules" | "team" | "payment" | "company");
 
   const f = (k: keyof Settings, v: string | number) => setS(prev => ({ ...prev, [k]: v }));
 
@@ -63,6 +63,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
 
   const STABS = [
     ...(isAdmin ? [] : [{ id: "personal" as const, label: "Personal",   icon: "ti-user"        }]),
+    ...(isAdmin ? [{ id: "company" as const, label: "Company",    icon: "ti-building"    }] : []),
     ...(isAdmin ? [{ id: "rules"   as const, label: "Work Rules", icon: "ti-adjustments" }] : []),
     ...(isAdmin ? [{ id: "team"    as const, label: "Team",       icon: "ti-users"       }] : []),
     ...(isAdmin ? [] : [{ id: "payment"  as const, label: "Payment",    icon: "ti-credit-card" }]),
@@ -246,6 +247,30 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "company" && isAdmin && (
+          <div className="form-grid">
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 16px", gridColumn: "1 / -1" }}>
+              This information appears on the <strong>Invoice to:</strong> section of every worker's ABN tax invoice.
+            </p>
+            <div className="field full">
+              <label htmlFor="s-cname">Company name</label>
+              <input id="s-cname" type="text" placeholder="Acme Pty Ltd" value={s.companyName} onChange={e => f("companyName", e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="s-cabn">Company ABN</label>
+              <input id="s-cabn" type="text" placeholder="00 000 000 000" value={s.companyAbn} onChange={e => f("companyAbn", e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="s-cemail">Company email</label>
+              <input id="s-cemail" type="email" placeholder="accounts@company.com.au" value={s.companyEmail} onChange={e => f("companyEmail", e.target.value)} />
+            </div>
+            <div className="field full">
+              <label htmlFor="s-caddr">Company address</label>
+              <input id="s-caddr" type="text" placeholder="Street, Suburb – State Postcode" value={s.companyAddress} onChange={e => f("companyAddress", e.target.value)} />
             </div>
           </div>
         )}
@@ -446,6 +471,10 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
           {isAdmin && activeTab === "rules" ? (
             <button className="btn-primary" onClick={() => onSaveWorkerRules?.(workerRules)}>
               <i className="ti ti-check" aria-hidden="true" /> Save Worker Rules
+            </button>
+          ) : isAdmin && activeTab === "company" ? (
+            <button className="btn-primary" onClick={() => onSave(s)}>
+              <i className="ti ti-check" aria-hidden="true" /> Save Company Info
             </button>
           ) : !isAdmin && activeTab !== "team" ? (
             <button className="btn-primary" onClick={() => onSave(s)}>

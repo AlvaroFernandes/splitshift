@@ -38,7 +38,7 @@ export default function WorkHoursTracker() {
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding, handleCompleteOnboarding,
-    managedViewers, auditLog,
+    managedViewers, auditLog, adminCompanyInfo,
   } = useAppData();
 
   if (loading) {
@@ -152,6 +152,7 @@ export default function WorkHoursTracker() {
         )}
         {tab === "abn" && userRole !== "admin" && (
           <ABNInvoice processed={processed} settings={settings}
+            adminCompanyInfo={adminCompanyInfo}
             periodStart={periodStart} periodEnd={periodEnd}
             onAdvance={advanceInvoice} onItemsChange={updateInvoiceItems} />
         )}

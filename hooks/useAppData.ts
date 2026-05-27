@@ -56,6 +56,7 @@ export function useAppData() {
   const [workerSettings,     setWorkerSettings]     = useState<Record<string, Settings>>({});
   const [reminderDismissed,  setReminderDismissed]  = useState(false);
   const [auditLog,           setAuditLog]           = useState<AuditEntry[]>([]);
+  const [adminCompanyInfo,   setAdminCompanyInfo]   = useState<{ companyName: string; companyAbn: string; companyAddress: string; companyEmail: string } | null>(null);
 
   // Refs for stale-closure-safe reads inside memoised callbacks
   const entriesRef      = useRef<Entry[]>([]);
@@ -141,11 +142,13 @@ export function useAppData() {
             if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
           }
         } else {
-          const [fetchedEntries, settingsRow, invoices] = await Promise.all([
+          const [fetchedEntries, settingsRow, invoices, companyRes] = await Promise.all([
             getEntries(supabase, user.id),
             fetchSettings(),
             getInvoices(supabase, user.id),
+            fetch("/api/company-info"),
           ]);
+          if (companyRes.ok) setAdminCompanyInfo(await companyRes.json());
           setEntries(fetchedEntries);
           if (settingsRow) {
             setSettings(settingsRow.settings);
@@ -646,5 +649,6 @@ export function useAppData() {
     managedViewers,
     handleCompleteOnboarding,
     auditLog,
+    adminCompanyInfo,
   };
 }
