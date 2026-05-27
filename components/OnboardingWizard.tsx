@@ -76,7 +76,7 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({ initialSe
               </div>
               <div className="field">
                 <label htmlFor="ob-phone">Phone</label>
-                <input id="ob-phone" type="text" placeholder="04XX XXX XXX"
+                <input id="ob-phone" type="text" placeholder="0400 000 000"
                   value={form.yourPhone} onChange={e => f("yourPhone", e.target.value)} />
               </div>
             </div>
@@ -93,14 +93,14 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({ initialSe
             <div className="form-grid">
               <div className="field">
                 <label htmlFor="ob-rate">Default hourly rate (AUD/h)</label>
-                <input id="ob-rate" type="number" min="0" step="0.01" placeholder="35.00"
+                <input id="ob-rate" type="number" min="0" step="0.01" placeholder="0.00"
                   value={form.defaultRate} onChange={e => f("defaultRate", e.target.value)} autoFocus />
               </div>
               <div className="field">
                 <label htmlFor="ob-abn">
                   Your ABN <span style={{ fontWeight: 400, color: "var(--color-text-tertiary)" }}>(optional)</span>
                 </label>
-                <input id="ob-abn" type="text" placeholder="12 345 678 901"
+                <input id="ob-abn" type="text" placeholder="00 000 000 000"
                   value={form.abn} onChange={e => f("abn", e.target.value)} />
               </div>
             </div>
@@ -125,12 +125,12 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({ initialSe
               </div>
               <div className="field">
                 <label htmlFor="ob-bsb">BSB</label>
-                <input id="ob-bsb" type="text" placeholder="062-028"
+                <input id="ob-bsb" type="text" placeholder="000-000"
                   value={form.bsb} onChange={e => f("bsb", e.target.value)} />
               </div>
               <div className="field">
                 <label htmlFor="ob-acc">Account number</label>
-                <input id="ob-acc" type="text" placeholder="1144-0435"
+                <input id="ob-acc" type="text" placeholder="00000000"
                   value={form.accountNumber} onChange={e => f("accountNumber", e.target.value)} />
               </div>
             </div>
