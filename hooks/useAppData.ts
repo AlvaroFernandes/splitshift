@@ -9,7 +9,7 @@ import type {
 } from "@/types";
 import { calcHours, processEntries, weekStart } from "@/lib/calculations";
 import { todayStr, genId } from "@/lib/formatters";
-import { getEntries, getAdminEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
+import { getEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getWorkerSettings, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
 
 async function fetchSettings(): Promise<{ settings: import("@/types").Settings; periodStart: string; periodEnd: string } | null> {
@@ -99,21 +99,20 @@ export function useAppData() {
         setUserRole(role);
 
         if (role === "admin") {
-          const [team, settingsRow, log] = await Promise.all([
+          const [team, settingsRow, log, entriesRes] = await Promise.all([
             getManagedTeam(supabase, user.id),
             fetchSettings(),
             getAuditLog(supabase),
+            fetch("/api/admin-entries"),
           ]);
           setManagedUsers(team.users);
           setManagedAdmins(team.admins);
           setManagedViewers(team.viewers);
           setAuditLog(log);
 
+          const fetchedEntries = entriesRes.ok ? await entriesRes.json() : [];
           const workerIds = team.users.map(u => u.id);
-          const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
-            getAdminEntries(supabase, workerIds),
-            getWorkerSettings(supabase, workerIds),
-          ]);
+          const fetchedWorkerSettings = await getWorkerSettings(supabase, workerIds);
           setEntries(fetchedEntries);
           setWorkerSettings(fetchedWorkerSettings);
           if (settingsRow) {
@@ -123,17 +122,16 @@ export function useAppData() {
           }
         } else if (role === "viewer") {
           if (!adminId) { setLoading(false); return; }
-          const [team, settingsRow] = await Promise.all([
+          const [team, settingsRow, entriesRes] = await Promise.all([
             getManagedTeam(supabase, adminId),
             fetchSettings(),
+            fetch("/api/admin-entries"),
           ]);
           setManagedUsers(team.users);
 
+          const fetchedEntries = entriesRes.ok ? await entriesRes.json() : [];
           const workerIds = team.users.map(u => u.id);
-          const [fetchedEntries, fetchedWorkerSettings] = await Promise.all([
-            getAdminEntries(supabase, workerIds),
-            getWorkerSettings(supabase, workerIds),
-          ]);
+          const fetchedWorkerSettings = await getWorkerSettings(supabase, workerIds);
           setEntries(fetchedEntries);
           setWorkerSettings(fetchedWorkerSettings);
           if (settingsRow) {
