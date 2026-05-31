@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import type { ProcessedEntry, Settings, InvoiceItem, InvLineRow } from "@/types";
-import { fdInv, todayStr, genId, buildPdfFilename, downloadPdf } from "@/lib/formatters";
+import { fdInv, todayStr, genId, buildPdfFilename, downloadPdf, formatAbn } from "@/lib/formatters";
 import { weekStart } from "@/lib/calculations";
 
 export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, adminCompanyInfo, onAdvance, onItemsChange }: {
@@ -171,7 +171,7 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, 
                     const email   = co.companyEmail   || settings.companyEmail;
                     return (<>
                       <div style={{ fontWeight: 700, fontSize: 14 }}>Invoice to: {name || "Company Name"}</div>
-                      {abn     && <div>ABN: {abn}</div>}
+                      {abn     && <div>ABN: {formatAbn(abn)}</div>}
                       {address && <div>{address}</div>}
                       {email   && <div>Email: {email}</div>}
                     </>);

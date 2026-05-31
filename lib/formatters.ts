@@ -1,3 +1,10 @@
+// Formats an ABN string as XX XXX XXX XXX regardless of how it was entered.
+export function formatAbn(abn: string): string {
+  const d = abn.replace(/\D/g, "");
+  if (d.length !== 11) return abn;
+  return `${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 8)} ${d.slice(8, 11)}`;
+}
+
 export function fh(h: number): string {
   if (!h || h <= 0) return "0h 00m";
   const hrs = Math.floor(h);
