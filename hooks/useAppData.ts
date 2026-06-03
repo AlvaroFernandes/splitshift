@@ -253,6 +253,22 @@ export function useAppData() {
       : [...entries, entry];
     setEntries(newEntries);
     showToast(editId ? "Entry updated" : "Entry added");
+    if (!editId) {
+      // Fire-and-forget — never blocks the UI or fails the save
+      fetch("/api/notify-entry", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          date:           entry.date,
+          jobDescription: entry.jobDescription,
+          client:         entry.client,
+          startTime:      entry.startTime,
+          endTime:        entry.endTime,
+          breakMins:      entry.breakMins,
+          hourlyRate:     entry.hourlyRate,
+        }),
+      }).catch(() => {});
+    }
     setEditId(null);
     return true;
   }, [editId, userId, entries]); // formData is a param; showToast/saveEntry/setters are stable
