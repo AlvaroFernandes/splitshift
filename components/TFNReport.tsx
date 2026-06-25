@@ -59,7 +59,14 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                     {hasClients && <td style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{e.client ?? <span className="muted">—</span>}</td>}
                     <td className="mono">{e.startTime}</td>
                     <td className="mono">{e.endTime}</td>
-                    <td className="mono">{fh(e.rTFN)}</td>
+                    <td className="mono">
+                      {fh(e.rTFN)}
+                      {e.otTFN > 0 && (
+                        <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)", fontSize: 11 }}>
+                          ({fh(e.rTFN + e.otTFN * 1.5)})
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -69,7 +76,14 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
           <div className="totals-row mt-3">
             <div className="card" style={{ padding: "12px 16px" }}>
               <div className="muted" style={{ fontSize: 12 }}>Regular hours</div>
-              <div className="mono" style={{ fontSize: 18, fontWeight: 500, color: "var(--color-text-success)" }}>{fh(regHrs)}</div>
+              <div className="mono" style={{ fontSize: 18, fontWeight: 500, color: "var(--color-text-success)" }}>
+                {fh(regHrs)}
+                {otHrs > 0 && (
+                  <span style={{ marginLeft: 6, color: "var(--color-text-tertiary)", fontSize: 13, fontWeight: 400 }}>
+                    ({fh(regHrs + otHrs * 1.5)})
+                  </span>
+                )}
+              </div>
             </div>
             <div className="card" style={{ padding: "12px 16px" }}>
               <div className="muted" style={{ fontSize: 12 }}>Overtime hours</div>
