@@ -420,8 +420,9 @@ export function useAppData() {
         entries.filter(e => !e.archived && e.date >= mon && e.date <= today),
         settings.tfnLimit, tfnRateW, settings.overtimeThreshold || 12, settings.excessMode ?? "abn",
       );
-      const weekTfn = weekProc.reduce((s, e) => s + e.tfnPortion, 0);
-      tfnPct = Math.min(100, (weekTfn / (settings.tfnLimit || 30)) * 100);
+      // Use weighted hours (OT = 1.5×) to match how the TFN budget is consumed
+      const weekWeightedTfn = weekProc.reduce((s, e) => s + e.rTFN + e.otTFN * 1.5, 0);
+      tfnPct = Math.min(100, (weekWeightedTfn / (settings.tfnLimit || 30)) * 100);
     }
     return { allPeriodEntries, processed, weeklyData, totals, tfnPct, chartProcessed };
   }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, settings.excessMode, userRole, workerSettings]);

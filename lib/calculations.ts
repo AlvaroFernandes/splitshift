@@ -23,9 +23,18 @@ export function weekStart(dateStr: string): string {
  * Processes entries into billable buckets.
  *
  * Two independent splits per entry:
- *   OVERTIME – hours beyond `overtimeThreshold` in a single entry → rate ×1.5
- *   TFN/ABN  – first `tfnLimit` hours per Mon–Sun week → TFN salary; excess → ABN invoice
- *              The TFN counter resets every Monday.
+ *   OVERTIME – hours beyond `overtimeThreshold` in a single entry
+ *   TFN/ABN  – first `tfnLimit` weighted hours per Mon–Sun week → TFN salary;
+ *              excess → ABN invoice. The TFN counter resets every Monday.
+ *
+ * TFN salary model (when tfnRate is set):
+ *   - TFN pay for a week is always tfnLimit × tfnRate (fixed salary).
+ *   - Overtime hours cost 1.5× toward the TFN weekly budget, so they exhaust
+ *     it faster (e.g. 3 OT hours consume 4.5 weighted hours from the budget).
+ *   - There is no overtime pay bonus — earnings stay at tfnRate per weighted
+ *     hour, so total TFN pay is always exactly tfnLimit × tfnRate per week.
+ *   - If a worker logs fewer weighted hours than tfnLimit, the salary top-up
+ *     is added to the last TFN entry of that week so all sums remain consistent.
  *
  * The intersection produces four buckets per entry: rTFN, otTFN, rABN, otABN.
  */
@@ -41,10 +50,11 @@ export function processEntries(
     return d !== 0 ? d : a.startTime.localeCompare(b.startTime);
   });
 
+  // weekRun tracks WEIGHTED TFN hours consumed (regular = 1×, overtime = 1.5×)
   let weekRun     = 0;
   let currentWeek = "";
 
-  return sorted.map(entry => {
+  const processed = sorted.map(entry => {
     const ew = weekStart(entry.date);
     if (ew !== currentWeek) { weekRun = 0; currentWeek = ew; }
 
@@ -54,21 +64,39 @@ export function processEntries(
     const regular  = Math.min(total, overtimeThreshold);
     const overtime = total - regular;
 
-    const tfnPortion = Math.max(0, Math.min(tfnLimit, weekRun + total) - weekRun);
-    const abnPortion = total - tfnPortion;
+    // Weighted cost of this entry: OT hours count 1.5× toward the TFN budget
+    const weightedCost    = regular + overtime * 1.5;
+    const tfnBudgetLeft   = Math.max(0, tfnLimit - weekRun);
+    const tfnWeightedUsed = Math.min(weightedCost, tfnBudgetLeft);
 
-    const rTFN  = Math.max(0, Math.min(regular, tfnPortion));
-    const otTFN = Math.max(0, Math.min(total, tfnPortion) - regular);
-    const rABN  = Math.max(0, Math.min(regular, total) - tfnPortion);
-    const otABN = Math.max(0, total - Math.max(regular, tfnPortion));
+    // Split actual hours into TFN / ABN buckets based on weighted budget
+    let rTFN: number, otTFN: number, rABN: number, otABN: number;
+    if (tfnWeightedUsed <= regular) {
+      // Budget exhausted within the regular portion of this entry
+      rTFN = tfnWeightedUsed;
+      otTFN = 0;
+      rABN  = regular - rTFN;
+      otABN = overtime;
+    } else {
+      // Budget covers all regular hours and part (or all) of overtime
+      rTFN = regular;
+      otTFN = (tfnWeightedUsed - regular) / 1.5;
+      rABN  = 0;
+      otABN = overtime - otTFN;
+    }
+
+    const tfnPortion = rTFN + otTFN;
+    const abnPortion = total - tfnPortion;
 
     const abnR = entry.hourlyRate;
     const tR   = tfnRate ?? abnR;
-    const tfnEarnings = rTFN * tR  + otTFN * tR  * 1.5;
+    // tfnEarnings = tR × weighted hours used = rTFN×tR + otTFN×tR×1.5
+    // When the weekly budget is fully consumed this sums to tfnLimit × tR exactly.
+    const tfnEarnings = rTFN * tR + otTFN * tR * 1.5;
     const abnEarnings = excessMode === "bank" ? 0 : rABN * abnR + otABN * abnR * 1.5;
     const bankHours   = excessMode === "bank" ? abnPortion : 0;
 
-    weekRun += total;
+    weekRun += tfnWeightedUsed;
 
     return {
       ...entry,
@@ -79,4 +107,32 @@ export function processEntries(
       totalEarnings: tfnEarnings + abnEarnings,
     };
   });
+
+  // Salary top-up: if a week's weighted TFN hours are below tfnLimit (worker
+  // logged fewer hours than the budget), add the shortfall × tfnRate to the
+  // last TFN entry so the weekly total always equals tfnLimit × tfnRate.
+  if (tfnRate !== undefined) {
+    const weekGroups = new Map<string, number[]>();
+    for (let i = 0; i < processed.length; i++) {
+      const ws = weekStart(processed[i].date);
+      if (!weekGroups.has(ws)) weekGroups.set(ws, []);
+      weekGroups.get(ws)!.push(i);
+    }
+    for (const indices of weekGroups.values()) {
+      const weekWeightedTfn = indices.reduce((s, i) => {
+        const e = processed[i];
+        return s + e.rTFN + e.otTFN * 1.5;
+      }, 0);
+      if (weekWeightedTfn < tfnLimit) {
+        const lastTfnIdx = [...indices].reverse().find(i => processed[i].tfnPortion > 0);
+        if (lastTfnIdx !== undefined) {
+          const adj = (tfnLimit - weekWeightedTfn) * tfnRate;
+          const e = processed[lastTfnIdx];
+          processed[lastTfnIdx] = { ...e, tfnEarnings: e.tfnEarnings + adj, totalEarnings: e.totalEarnings + adj };
+        }
+      }
+    }
+  }
+
+  return processed;
 }
