@@ -251,7 +251,14 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                   <td style={{ whiteSpace: "nowrap", fontWeight: 500 }}>{weekLabel(w.weekStart)}</td>
                   <td>{w.entries.length}</td>
                   <td className="mono muted">{w.breakMinsTotal > 0 ? `${w.breakMinsTotal}m` : "—"}</td>
-                  <td className="mono">{fh(w.hours)}</td>
+                  <td className="mono">
+                    {fh(w.hours)}
+                    {w.overtime > 0 && (
+                      <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)", fontSize: 11 }}>
+                        ({fh(w.regular + w.overtime * 1.5)})
+                      </span>
+                    )}
+                  </td>
                   <td className="mono">{fh(w.regular)}</td>
                   <td className="mono">{w.overtime > 0 ? <Bdg type="ot">{fh(w.overtime)}</Bdg> : <span className="muted">—</span>}</td>
                   <td className="mono">{w.tfnHours > 0 ? <Bdg type="tfn">{fh(w.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
@@ -300,7 +307,14 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                       {e.startTime}–{e.endTime}
                       {e.breakMins > 0 && <span className="muted"> −{e.breakMins}m</span>}
                     </td>
-                    <td className="mono" style={{ fontSize: 12 }}>{fh(e.regular)}</td>
+                    <td className="mono" style={{ fontSize: 12 }}>
+                      {fh(e.regular)}
+                      {e.overtime > 0 && (
+                        <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)", fontSize: 10 }}>
+                          ({fh(e.regular + e.overtime * 1.5)})
+                        </span>
+                      )}
+                    </td>
                     <td>{e.overtime > 0 ? <Bdg type="ot">{fh(e.overtime)}</Bdg> : <span className="muted">—</span>}</td>
                     <td>{e.tfnPortion > 0 ? <Bdg type="tfn">{fh(e.tfnPortion)}</Bdg> : <span className="muted">—</span>}</td>
                     <td>{e.abnPortion > 0 ? <Bdg type="abn">{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>
@@ -318,7 +332,14 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               <td style={{ fontWeight: 500, fontSize: 12 }}>Total</td>
               <td>{visible.length}</td>
               <td className="mono muted">{grandTotal.breakMinsTotal > 0 ? `${grandTotal.breakMinsTotal}m` : "—"}</td>
-              <td className="mono" style={{ fontWeight: 500 }}>{fh(grandTotal.hours)}</td>
+              <td className="mono" style={{ fontWeight: 500 }}>
+                {fh(grandTotal.hours)}
+                {grandTotal.overtime > 0 && (
+                  <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)", fontSize: 11, fontWeight: 400 }}>
+                    ({fh(grandTotal.regular + grandTotal.overtime * 1.5)})
+                  </span>
+                )}
+              </td>
               <td className="mono">{fh(grandTotal.regular)}</td>
               <td className="mono">{grandTotal.overtime > 0 ? <Bdg type="ot">{fh(grandTotal.overtime)}</Bdg> : <span className="muted">—</span>}</td>
               <td className="mono">{grandTotal.tfnHours > 0 ? <Bdg type="tfn">{fh(grandTotal.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
