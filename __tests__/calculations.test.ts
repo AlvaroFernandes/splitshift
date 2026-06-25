@@ -153,11 +153,13 @@ describe("processEntries", () => {
 
   it("applies a separate TFN rate when provided", () => {
     const e = entry({ id: "1", date: "2026-05-18", startTime: "09:00", endTime: "17:00", hourlyRate: 50 });
-    // 8h all TFN, tfnRate = 40
+    // 8h all TFN, tfnRate = 40, tfnLimit = 30
+    // Fixed salary model: earnings = tfnLimit × tfnRate = 30 × $40 = $1,200
+    // (top-up for the 22 unused weighted hours is applied to this entry)
     const [r] = processEntries([e], 30, 40);
-    expect(r.tfnEarnings).toBeCloseTo(8 * 40); // $320
+    expect(r.tfnEarnings).toBeCloseTo(30 * 40); // $1,200
     expect(r.abnEarnings).toBeCloseTo(0);
-    expect(r.totalEarnings).toBeCloseTo(320);
+    expect(r.totalEarnings).toBeCloseTo(30 * 40);
   });
 
   it("deducts break minutes from worked hours", () => {
