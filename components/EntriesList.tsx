@@ -183,7 +183,14 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
                       <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)" }}>−{e.breakMins}m</span>
                     )}
                   </td>
-                  <td className="mono">{fh(e.total)}</td>
+                  <td className="mono">
+                    {fh(e.total)}
+                    {e.overtime > 0 && (
+                      <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)", fontSize: 11 }}>
+                        ({fh(e.regular + e.overtime * 1.5)})
+                      </span>
+                    )}
+                  </td>
                   <td className="mono">{fc(e.hourlyRate)}/h</td>
                   {!isAdmin && (
                     <td style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
