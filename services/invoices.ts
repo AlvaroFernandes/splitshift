@@ -56,6 +56,24 @@ export async function saveInvoice(
   return fromInvoiceRow(data as Record<string, unknown>);
 }
 
+export interface UpdateInvoiceParams {
+  id: string;
+  issueDate: string;
+  companyName: string;
+  subtotal: number;
+  data: SavedInvoice["data"];
+}
+
+export async function updateInvoice(supabase: SupabaseClient, params: UpdateInvoiceParams): Promise<boolean> {
+  const { error } = await supabase.from("invoices").update({
+    issue_date:   params.issueDate,
+    company_name: params.companyName,
+    subtotal:     params.subtotal,
+    data:         params.data,
+  }).eq("id", params.id);
+  return !error;
+}
+
 export async function deleteInvoice(supabase: SupabaseClient, id: string): Promise<boolean> {
   const { error } = await supabase.from("invoices").delete().eq("id", id);
   return !error;

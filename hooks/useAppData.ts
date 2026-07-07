@@ -27,7 +27,7 @@ async function persistSettings(settings: import("@/types").Settings, periodStart
   return res.ok;
 }
 import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
-import { getInvoices, saveInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
+import { getInvoices, saveInvoice, updateInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
 import { logActivity, getAuditLog } from "@/services/audit";
 
 export function useAppData() {
@@ -629,6 +629,21 @@ export function useAppData() {
     showToast("Invoice deleted");
   }, [viewingInvoice]); // supabase/showToast/setters are stable
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleUpdateInvoice = useCallback(async (updated: SavedInvoice) => {
+    const ok = await updateInvoice(supabase, {
+      id:          updated.id,
+      issueDate:   updated.issueDate,
+      companyName: updated.companyName,
+      subtotal:    updated.subtotal,
+      data:        updated.data,
+    });
+    if (!ok) { showToast("Could not update invoice", "err"); return; }
+    setInvoiceHistory(prev => prev.map(i => i.id === updated.id ? updated : i));
+    setViewingInvoice(updated);
+    showToast("Invoice updated");
+  }, []); // supabase/showToast/setters are stable
+
   const updateInvoiceItems = useCallback((items: Settings["invoiceItems"]) => {
     const s = { ...settings, invoiceItems: items };
     setSettings(s);
@@ -657,7 +672,7 @@ export function useAppData() {
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,
-    advanceInvoice, handleDeleteInvoice, handleShareInvoice, handleCancelEdit,
+    advanceInvoice, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding: !loading && !settings.onboardingCompleted &&
