@@ -66,3 +66,9 @@ export async function archiveEntries(supabase: SupabaseClient, ids: string[]): P
   const { error } = await supabase.from("entries").update({ archived: true }).in("id", ids);
   return !error;
 }
+
+export async function unarchiveEntries(supabase: SupabaseClient, ids: string[]): Promise<boolean> {
+  if (ids.length === 0) return true;
+  const { error } = await supabase.from("entries").update({ archived: false }).in("id", ids);
+  return !error;
+}

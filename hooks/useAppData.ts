@@ -9,7 +9,7 @@ import type {
 } from "@/types";
 import { calcHours, processEntries, weekStart } from "@/lib/calculations";
 import { todayStr, genId } from "@/lib/formatters";
-import { getEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
+import { getEntries, upsertEntry, deleteEntry, archiveEntries, unarchiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getWorkerSettings, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
 
 // Rebuilds the ABN invoice line items derived from work entries (rate/hours-based
@@ -684,13 +684,26 @@ export function useAppData() {
   }, [invoiceHistory]); // supabase/showToast/setters stable
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleDeleteInvoice = useCallback(async (id: string) => {
+    const inv = invoiceHistoryRef.current.find(i => i.id === id);
     const ok = await deleteInvoice(supabase, id);
     if (!ok) { showToast("Could not delete invoice", "err"); return; }
     setInvoiceHistory(prev => prev.filter(i => i.id !== id));
     if (viewingInvoice?.id === id) setViewingInvoice(null);
+
+    // Deleting the invoice shouldn't leave its entries stuck as archived —
+    // that would hide them from ABN Invoice generation with no way to re-invoice them.
+    if (inv) {
+      const toRestore = entriesRef.current
+        .filter(e => e.archived && e.date >= inv.data.periodStart && e.date <= inv.data.periodEnd)
+        .map(e => e.id);
+      if (toRestore.length > 0 && await unarchiveEntries(supabase, toRestore)) {
+        setEntries(prev => prev.map(e => toRestore.includes(e.id) ? { ...e, archived: false } : e));
+      }
+    }
     showToast("Invoice deleted");
-  }, [viewingInvoice]); // supabase/showToast/setters are stable
+  }, [viewingInvoice]); // supabase/showToast/setters/refs are stable
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleUpdateInvoice = useCallback(async (updated: SavedInvoice) => {

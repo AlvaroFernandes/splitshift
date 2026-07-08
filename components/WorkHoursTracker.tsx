@@ -144,7 +144,9 @@ export default function WorkHoursTracker() {
             userFilter={adminUserFilter} onUserFilterChange={setAdminUserFilter} />
         )}
         {tab === "weekly" && (
-          <WeeklyReport processed={weeklyData} settings={settings} isAdmin={userRole === "admin"} users={managedUsers} />
+          <WeeklyReport processed={weeklyData} settings={settings} isAdmin={userRole === "admin"}
+            isReadOnly={userRole === "viewer"} users={managedUsers}
+            onEdit={handleEdit} onDelete={handleDelete} />
         )}
         {tab === "tfn" && userRole !== "admin" && (
           <TFNReport processed={processed} totals={totals} settings={settings}

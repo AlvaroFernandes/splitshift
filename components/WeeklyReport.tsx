@@ -109,14 +109,26 @@ interface Props {
   processed: ProcessedEntry[];
   settings: Settings;
   isAdmin?: boolean;
+  isReadOnly?: boolean;
   users?: ManagedUser[];
+  onEdit?: (e: ProcessedEntry) => void;
+  onDelete?: (id: string) => void | Promise<void>;
 }
 
-export const WeeklyReport = React.memo(function WeeklyReport({ processed, settings, isAdmin, users }: Props) {
+export const WeeklyReport = React.memo(function WeeklyReport({ processed, settings, isAdmin, isReadOnly, users, onEdit, onDelete }: Props) {
   const [expanded,      setExpanded]      = React.useState<Record<string, boolean>>({});
   const [selectedWeek,  setSelectedWeek]  = React.useState<WeekSummary | null>(null);
   const [downloading,   setDownloading]   = React.useState(false);
   const [workerFilter,  setWorkerFilter]  = React.useState("all");
+  const [deletingId,    setDeletingId]    = React.useState<string | null>(null);
+
+  const canEdit = !isReadOnly && (onEdit || onDelete);
+
+  const handleDeleteClick = async (id: string) => {
+    if (!onDelete) return;
+    setDeletingId(id);
+    try { await onDelete(id); } finally { setDeletingId(null); }
+  };
 
   const visible = React.useMemo(() =>
     isAdmin && workerFilter !== "all"
@@ -321,7 +333,27 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                     <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>
                     <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{fc(e.abnEarnings)}</td>
                     <td className="mono" style={{ fontSize: 12 }}>{fc(e.totalEarnings)}</td>
-                    <td />
+                    <td>
+                      {canEdit && (
+                        <span style={{ display: "flex", gap: 4 }}>
+                          {onEdit && (
+                            <button className="icon-btn-sm no-print" onClick={() => onEdit(e)} aria-label="Edit" title={e.archived ? "Editing recalculates the saved invoice" : "Edit"}>
+                              <i className="ti ti-edit" aria-hidden="true" />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              className="icon-btn-sm danger no-print"
+                              onClick={() => handleDeleteClick(e.id)}
+                              disabled={deletingId === e.id}
+                              aria-label={deletingId === e.id ? "Deleting…" : "Delete"}
+                            >
+                              <i className={`ti ${deletingId === e.id ? "ti-loader-2" : "ti-trash"}`} aria-hidden="true" />
+                            </button>
+                          )}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </React.Fragment>
