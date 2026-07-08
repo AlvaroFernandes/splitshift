@@ -91,6 +91,21 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
         <p style={{ fontWeight: 500, marginBottom: 16 }}>
           {editEntry ? "Edit Entry" : "Log Work Hours"}
         </p>
+        {editEntry?.archived && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 16px", marginBottom: 16,
+            background: "var(--color-background-secondary)",
+            borderLeft: "3px solid var(--color-text-info)",
+            borderRadius: "var(--border-radius-md)",
+            fontSize: 13,
+          }}>
+            <i className="ti ti-info-circle" aria-hidden="true" style={{ color: "var(--color-text-info)", flexShrink: 0 }} />
+            <span style={{ color: "var(--color-text-secondary)" }}>
+              This entry was already invoiced. Saving will recalculate that invoice. The date is locked to keep it in its original week.
+            </span>
+          </div>
+        )}
         <div className="form-grid">
           <div className="field full">
             <label htmlFor="f-desc">Job description</label>
@@ -107,7 +122,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
           </div>
           <div className="field">
             <label htmlFor="f-date">Date</label>
-            <input id="f-date" type="date" value={form.date} onChange={e => f("date", e.target.value)} />
+            <input id="f-date" type="date" value={form.date} disabled={!!editEntry?.archived} onChange={e => f("date", e.target.value)} />
           </div>
           <div className="field">
             <label htmlFor="f-rate">Hourly rate (AUD)</label>

@@ -119,6 +119,7 @@ export interface InvLineRow {
   rate: number | null;
   hours: number | null;
   amount: number;
+  entryId?: string; // set when this row was derived from a work entry, so it can be regenerated if that entry is later edited
 }
 
 export interface AuditEntry {

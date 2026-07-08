@@ -29,7 +29,7 @@ export default function WorkHoursTracker() {
     managedUsers,
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
-    processed, weeklyData, totals, tfnPct, chartProcessed, TABS,
+    processed, weeklyData, totals, tfnPct, chartProcessed, TABS, archivedEntries,
     toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
@@ -138,7 +138,7 @@ export default function WorkHoursTracker() {
             templates={settings.templates ?? []} onSaveTemplate={handleSaveTemplate} />
         )}
         {tab === "entries" && (
-          <EntriesList processed={processed} onEdit={handleEdit} onDelete={handleDelete}
+          <EntriesList processed={processed} archivedProcessed={archivedEntries} onEdit={handleEdit} onDelete={handleDelete}
             isAdmin={userRole === "admin" || userRole === "viewer"} users={managedUsers}
             isReadOnly={userRole === "viewer"}
             userFilter={adminUserFilter} onUserFilterChange={setAdminUserFilter} />

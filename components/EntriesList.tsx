@@ -44,8 +44,9 @@ function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>
   URL.revokeObjectURL(url);
 }
 
-export const EntriesList = React.memo(function EntriesList({ processed, onEdit, onDelete, isAdmin, isReadOnly, users, userFilter, onUserFilterChange }: {
+export const EntriesList = React.memo(function EntriesList({ processed, archivedProcessed, onEdit, onDelete, isAdmin, isReadOnly, users, userFilter, onUserFilterChange }: {
   processed: ProcessedEntry[];
+  archivedProcessed?: ProcessedEntry[];
   onEdit: (e: ProcessedEntry) => void;
   onDelete: (id: string) => void | Promise<void>;
   isAdmin?: boolean;
@@ -54,25 +55,36 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
   userFilter?: string;
   onUserFilterChange?: (v: string) => void;
 }) {
-  const [deletingId,   setDeletingId]   = useState<string | null>(null);
-  const [clientFilter, setClientFilter] = useState<string>("all");
+  const [deletingId,    setDeletingId]    = useState<string | null>(null);
+  const [clientFilter,  setClientFilter]  = useState<string>("all");
+  const [showInvoiced,  setShowInvoiced]  = useState(false);
 
   const handleDeleteClick = async (id: string) => {
     setDeletingId(id);
     try { await onDelete(id); } finally { setDeletingId(null); }
   };
 
+  const hasArchived = (archivedProcessed?.length ?? 0) > 0;
+
+  const combined = useMemo(() => {
+    if (!showInvoiced || !archivedProcessed || archivedProcessed.length === 0) return processed;
+    return [...processed, ...archivedProcessed].sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      return d !== 0 ? d : a.startTime.localeCompare(b.startTime);
+    });
+  }, [processed, archivedProcessed, showInvoiced]);
+
   const clientOptions = useMemo(() =>
-    [...new Set(processed.map(e => e.client).filter(Boolean))].sort() as string[],
-  [processed]);
+    [...new Set(combined.map(e => e.client).filter(Boolean))].sort() as string[],
+  [combined]);
 
   const visible = useMemo(() => {
     let rows = isAdmin && userFilter && userFilter !== "all"
-      ? processed.filter(e => e.ownerId === userFilter)
-      : processed;
+      ? combined.filter(e => e.ownerId === userFilter)
+      : combined;
     if (clientFilter !== "all") rows = rows.filter(e => e.client === clientFilter);
     return rows;
-  }, [processed, isAdmin, userFilter, clientFilter]);
+  }, [combined, isAdmin, userFilter, clientFilter]);
 
   const userMap = useMemo(
     () => new Map((users ?? []).map(u => [u.id, u.name])),
@@ -84,6 +96,16 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
   return (
     <div>
       <h2 className="sr-only">All entries for current period</h2>
+
+      {hasArchived && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--color-text-secondary)", cursor: "pointer", width: "fit-content" }}>
+            <input type="checkbox" checked={showInvoiced} onChange={e => setShowInvoiced(e.target.checked)} />
+            Show already-invoiced weeks
+            <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>(editing one updates its saved invoice)</span>
+          </label>
+        </div>
+      )}
 
       {(isAdmin && users && users.length > 0 || hasClients) && (
         <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -171,6 +193,11 @@ export const EntriesList = React.memo(function EntriesList({ processed, onEdit, 
                   )}
                   <td style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {e.jobDescription}
+                    {e.archived && (
+                      <span className="muted" style={{ marginLeft: 6, fontSize: 11 }} title="Already invoiced — editing recalculates the saved invoice">
+                        <i className="ti ti-receipt" aria-hidden="true" /> invoiced
+                      </span>
+                    )}
                   </td>
                   {hasClients && (
                     <td style={{ fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>

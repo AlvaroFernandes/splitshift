@@ -12,6 +12,19 @@ import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, upsertEntry, deleteEntry, archiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getWorkerSettings, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
 
+// Rebuilds the ABN invoice line items derived from work entries (rate/hours-based
+// rows), given a week's worth of processed entries. Manual/extra rows on a saved
+// invoice have no entryId and are left untouched by recomputation.
+function buildEntryRows(processedWeek: ProcessedEntry[]): InvLineRow[] {
+  const rows: InvLineRow[] = [];
+  for (const e of processedWeek) {
+    if (e.abnPortion <= 0) continue;
+    if (e.rABN > 0)  rows.push({ key: e.id + "-r",  entryId: e.id, date: e.date, startTime: e.startTime, description: e.jobDescription,                     client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
+    if (e.otABN > 0) rows.push({ key: e.id + "-ot", entryId: e.id, date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`, client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
+  }
+  return rows;
+}
+
 async function fetchSettings(): Promise<{ settings: import("@/types").Settings; periodStart: string; periodEnd: string } | null> {
   const res = await fetch("/api/settings");
   if (!res.ok) return null;
@@ -59,13 +72,17 @@ export function useAppData() {
   const [adminCompanyInfo,   setAdminCompanyInfo]   = useState<{ companyName: string; companyAbn: string; companyAddress: string; companyEmail: string } | null>(null);
 
   // Refs for stale-closure-safe reads inside memoised callbacks
-  const entriesRef      = useRef<Entry[]>([]);
-  const managedUsersRef = useRef<ManagedUser[]>([]);
-  const userIdRef       = useRef<string | null>(null);
-  const toastTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { entriesRef.current      = entries;      }, [entries]);
-  useEffect(() => { managedUsersRef.current = managedUsers; }, [managedUsers]);
-  useEffect(() => { userIdRef.current       = userId;       }, [userId]);
+  const entriesRef        = useRef<Entry[]>([]);
+  const managedUsersRef   = useRef<ManagedUser[]>([]);
+  const userIdRef         = useRef<string | null>(null);
+  const toastTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsRef       = useRef<Settings>(DEFAULT_SETTINGS);
+  const invoiceHistoryRef = useRef<SavedInvoice[]>([]);
+  useEffect(() => { entriesRef.current        = entries;        }, [entries]);
+  useEffect(() => { managedUsersRef.current   = managedUsers;   }, [managedUsers]);
+  useEffect(() => { userIdRef.current         = userId;         }, [userId]);
+  useEffect(() => { settingsRef.current       = settings;       }, [settings]);
+  useEffect(() => { invoiceHistoryRef.current = invoiceHistory; }, [invoiceHistory]);
 
   useEffect(() => {
     const saved = localStorage.getItem("wh_theme") as "light" | "dark" | null;
@@ -225,6 +242,43 @@ export function useAppData() {
     if (userId) saveSettings(settings, "", "");
   }, [userId, settings]); // saveSettings/setters are stable
 
+  // Recomputes and persists the saved invoice covering `entryDate`, if any, from
+  // the current entry data. Lets a worker correct hours/rate on an already-
+  // invoiced week without having to delete and recreate the invoice by hand.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const recomputeInvoiceForEntry = useCallback((allEntries: Entry[], entryDate: string) => {
+    const inv = invoiceHistoryRef.current.find(i =>
+      entryDate >= i.data.periodStart && entryDate <= i.data.periodEnd,
+    );
+    if (!inv) return;
+
+    const s = settingsRef.current;
+    const weekEntries = allEntries.filter(e =>
+      e.archived && e.date >= inv.data.periodStart && e.date <= inv.data.periodEnd,
+    );
+    const tfnRateParsed = parseFloat(s.tfnRate || "") || undefined;
+    const processedWeek = processEntries(weekEntries, s.tfnLimit, tfnRateParsed, s.overtimeThreshold || 12, s.excessMode ?? "abn");
+
+    const entryRows = buildEntryRows(processedWeek);
+    const manualRows = inv.data.rows.filter(r => !r.entryId);
+    const rows = [...entryRows, ...manualRows].sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      return d !== 0 ? d : (a.startTime ?? "").localeCompare(b.startTime ?? "");
+    });
+    const subtotal = rows.reduce((sum, r) => sum + r.amount, 0);
+    const updated: SavedInvoice = { ...inv, subtotal, data: { ...inv.data, rows } };
+
+    updateInvoice(supabase, {
+      id: updated.id, issueDate: updated.issueDate, companyName: updated.companyName,
+      subtotal: updated.subtotal, data: updated.data,
+    }).then(ok => {
+      if (!ok) { showToast("Entry saved, but the invoice could not be updated", "err"); return; }
+      setInvoiceHistory(prev => prev.map(i => i.id === updated.id ? updated : i));
+      setViewingInvoice(prev => (prev && prev.id === updated.id) ? updated : prev);
+      showToast(`Invoice #${updated.invoiceNum} recalculated`);
+    });
+  }, []); // supabase/showToast/setters/refs are stable
+
   const handleSave = useCallback(async (formData: FormState): Promise<boolean> => {
     const { date, jobDescription, startTime, endTime, hourlyRate } = formData;
     if (!date || !jobDescription.trim() || !startTime || !endTime || !hourlyRate) {
@@ -238,11 +292,14 @@ export function useAppData() {
     if (calcHours(startTime, endTime) <= 0) {
       showToast("End time must be after start time", "err"); return false;
     }
+    const original = editId ? entries.find(e => e.id === editId) : null;
     const entry: Entry = {
       ...formData,
       hourlyRate: hourlyRateNum,
       breakMins:  breakMinsNum,
       id: editId || genId(),
+      ...(original?.archived && { archived: true }),
+      ...(original?.ownerId  && { ownerId: original.ownerId }),
     };
     if (userId) {
       const ok = await saveEntry(entry, userId);
@@ -269,9 +326,10 @@ export function useAppData() {
         }),
       }).catch(() => {});
     }
+    if (original?.archived) recomputeInvoiceForEntry(newEntries, entry.date);
     setEditId(null);
     return true;
-  }, [editId, userId, entries]); // formData is a param; showToast/saveEntry/setters are stable
+  }, [editId, userId, entries]); // formData is a param; showToast/saveEntry/setters/recomputeInvoiceForEntry are stable
 
   const handleEdit = useCallback((entry: ProcessedEntry) => {
     if (userRole === "admin") {
@@ -309,13 +367,15 @@ export function useAppData() {
     const entry = entriesRef.current.find(e => e.id === id);
     const ok = await removeEntry(id);
     if (!ok) { showToast("Could not delete entry", "err"); return; }
-    setEntries(prev => prev.filter(e => e.id !== id));
+    const remaining = entriesRef.current.filter(e => e.id !== id);
+    setEntries(remaining);
     showToast("Entry deleted");
     if (entry?.ownerId) {
       const workerName = managedUsersRef.current.find(u => u.id === entry.ownerId)?.name ?? "worker";
       recordAudit("entry_deleted", "entry", id, { workerName, entryDate: entry.date, jobDescription: entry.jobDescription });
     }
-  }, []); // removeEntry/showToast/setters/refs/recordAudit are stable
+    if (entry?.archived) recomputeInvoiceForEntry(remaining, entry.date);
+  }, []); // removeEntry/showToast/setters/refs/recordAudit/recomputeInvoiceForEntry are stable
 
   const handleSettingsSave = useCallback((s: Settings) => {
     setSettings(s);
@@ -432,6 +492,13 @@ export function useAppData() {
     [editId, entries],
   );
 
+  // Already-invoiced entries a worker can still correct; editing/deleting one
+  // triggers recomputeInvoiceForEntry to keep the saved invoice in sync.
+  const archivedEntries = useMemo(
+    () => (userRole === "user" ? weeklyData.filter(e => e.archived) : []),
+    [weeklyData, userRole],
+  );
+
   const TABS = useMemo(() => {
     if (userRole === "admin") return [
       { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
@@ -498,11 +565,7 @@ export function useAppData() {
     const oldestWeek = [...new Set(abnEntries.map(e => weekStart(e.date)))].sort()[0];
     const wkEntries  = abnEntries.filter(e => weekStart(e.date) === oldestWeek);
 
-    const rows: InvLineRow[] = [];
-    for (const e of wkEntries) {
-      if (e.rABN > 0)  rows.push({ key: e.id + "-r",  date: e.date, startTime: e.startTime, description: e.jobDescription,                      client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate       });
-      if (e.otABN > 0) rows.push({ key: e.id + "-ot", date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`,  client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
-    }
+    const rows: InvLineRow[] = buildEntryRows(wkEntries);
     for (const item of extraItems) rows.push({ key: item.id, date: item.date, description: item.description, rate: null, hours: null, amount: item.amount });
     rows.sort((a, b) => {
       const d = a.date.localeCompare(b.date);
@@ -666,7 +729,7 @@ export function useAppData() {
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
     // derived
-    processed, weeklyData, totals, tfnPct, chartProcessed, TABS,
+    processed, weeklyData, totals, tfnPct, chartProcessed, TABS, archivedEntries,
     // handlers
     toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
