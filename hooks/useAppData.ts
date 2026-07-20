@@ -619,6 +619,25 @@ export function useAppData() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, processed, allPeriodEntries, userId, periodStart, periodEnd]); // supabase/showToast/setters stable
 
+  // Closes a week that never exceeded the TFN limit (no ABN/bank excess), so it
+  // drops out of the active period without going through the invoice flow.
+  const closeWeek = useCallback(async (ws: string) => {
+    const weekEntries = weeklyData.filter(e => weekStart(e.date) === ws);
+    const exceeded = weekEntries.some(e => e.abnPortion > 0 || e.bankHours > 0);
+    if (exceeded) { showToast("This week has hours over the limit — invoice required", "err"); return; }
+
+    const toCloseIds = weekEntries.filter(e => !e.archived).map(e => e.id);
+    if (toCloseIds.length === 0) return;
+
+    if (userId) {
+      const ok = await archiveEntries(supabase, toCloseIds);
+      if (!ok) { showToast("Could not close week", "err"); return; }
+    }
+    setEntries(prev => prev.map(e => toCloseIds.includes(e.id) ? { ...e, archived: true } : e));
+    showToast("Week closed — no invoice needed");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyData, userId]); // supabase/showToast/setters stable
+
   const handleCancelEdit = useCallback(() => {
     setEditId(null);
   }, []); // all stable setters
@@ -748,7 +767,7 @@ export function useAppData() {
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,
-    advanceInvoice, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
+    advanceInvoice, closeWeek, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding: !loading && !settings.onboardingCompleted &&

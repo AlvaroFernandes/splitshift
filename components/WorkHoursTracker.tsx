@@ -34,7 +34,7 @@ export default function WorkHoursTracker() {
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
     workerSettings, managedAdmins, clients,
-    advanceInvoice, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
+    advanceInvoice, closeWeek, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding, handleCompleteOnboarding,
@@ -150,7 +150,7 @@ export default function WorkHoursTracker() {
         )}
         {tab === "tfn" && userRole !== "admin" && (
           <TFNReport processed={processed} totals={totals} settings={settings}
-            periodStart={periodStart} periodEnd={periodEnd} />
+            periodStart={periodStart} periodEnd={periodEnd} onCloseWeek={closeWeek} />
         )}
         {tab === "abn" && userRole !== "admin" && (
           <ABNInvoice processed={processed} settings={settings}

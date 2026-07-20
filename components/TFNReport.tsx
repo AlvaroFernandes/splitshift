@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { ProcessedEntry, Totals, Settings } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { weekStart } from "@/lib/calculations";
@@ -10,10 +10,13 @@ function weekLabel(monStr: string): string {
   return `${mon.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
-export const TFNReport = React.memo(function TFNReport({ processed, totals, settings, periodStart, periodEnd }: {
+export const TFNReport = React.memo(function TFNReport({ processed, totals, settings, periodStart, periodEnd, onCloseWeek }: {
   processed: ProcessedEntry[]; totals: Totals; settings: Settings;
   periodStart: string; periodEnd: string;
+  onCloseWeek?: (weekStart: string) => void | Promise<void>;
 }) {
+  const [closingWeek, setClosingWeek] = useState<string | null>(null);
+
   const tfnEntries = processed.filter(e => e.tfnPortion > 0);
   const regHrs     = tfnEntries.reduce((a, e) => a + e.rTFN,  0);
   const otHrs      = tfnEntries.reduce((a, e) => a + e.otTFN, 0);
@@ -27,6 +30,21 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
     weekMap.get(ws)!.push(e);
   }
   const weeks = [...weekMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+  // A week can be closed without an invoice only if none of its entries (TFN
+  // or not) exceeded the admin's hour limit — i.e. no ABN or bank-hour excess.
+  const weekExceeded = new Map<string, boolean>();
+  for (const e of processed) {
+    const ws = weekStart(e.date);
+    if (e.abnPortion > 0 || e.bankHours > 0) weekExceeded.set(ws, true);
+    else if (!weekExceeded.has(ws)) weekExceeded.set(ws, false);
+  }
+
+  const handleClose = async (ws: string) => {
+    if (!onCloseWeek) return;
+    setClosingWeek(ws);
+    try { await onCloseWeek(ws); } finally { setClosingWeek(null); }
+  };
 
   return (
     <div>
@@ -63,14 +81,30 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
             const wOtHrs  = entries.reduce((a, e) => a + e.otTFN, 0);
             const wEarnings = entries.reduce((a, e) => a + e.tfnEarnings, 0);
 
+            const canClose = onCloseWeek && !weekExceeded.get(ws);
+
             return (
               <div key={ws} className="card mt-3" style={{ overflowX: "auto" }}>
                 <div style={{ marginBottom: 10, display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>
                     Week: {weekLabel(ws)}
                   </span>
-                  <span className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>
-                    {fc(wEarnings)}
+                  <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>
+                      {fc(wEarnings)}
+                    </span>
+                    {canClose && (
+                      <button
+                        className="btn-secondary no-print"
+                        style={{ fontSize: 12, padding: "4px 10px" }}
+                        disabled={closingWeek === ws}
+                        onClick={() => handleClose(ws)}
+                        title="Under the weekly hour limit — no ABN invoice needed"
+                      >
+                        <i className={`ti ${closingWeek === ws ? "ti-loader-2" : "ti-lock-check"}`} aria-hidden="true" />
+                        {closingWeek === ws ? "Closing…" : "Close week — no invoice"}
+                      </button>
+                    )}
                   </span>
                 </div>
                 <table className="data-table">
