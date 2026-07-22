@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import type {
-  AuditEntry, Entry, EntryTemplate, ManagedUser, ProcessedEntry, Settings, Totals,
+  AuditEntry, Entry, EntryTemplate, InviteStatus, ManagedUser, ProcessedEntry, Settings, Totals,
   FormState, Toast, InvLineRow, SavedInvoice, UserRole,
 } from "@/types";
 import { calcHours, processEntries, weekStart } from "@/lib/calculations";
@@ -38,6 +38,19 @@ async function persistSettings(settings: import("@/types").Settings, periodStart
     body: JSON.stringify({ settings, periodStart, periodEnd }),
   });
   return res.ok;
+}
+
+type InviteStatusMap = Record<string, { status: InviteStatus; invitedAt: string | null }>;
+
+async function fetchInviteStatuses(): Promise<InviteStatusMap> {
+  const res = await fetch("/api/invite");
+  if (!res.ok) return {};
+  const json = await res.json();
+  return json.statuses ?? {};
+}
+
+function withStatuses(users: ManagedUser[], statuses: InviteStatusMap): ManagedUser[] {
+  return users.map(u => statuses[u.id] ? { ...u, status: statuses[u.id].status, invitedAt: statuses[u.id].invitedAt } : u);
 }
 import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
 import { getInvoices, saveInvoice, updateInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
@@ -116,15 +129,16 @@ export function useAppData() {
         setUserRole(role);
 
         if (role === "admin") {
-          const [team, settingsRow, log, entriesRes] = await Promise.all([
+          const [team, settingsRow, log, entriesRes, statuses] = await Promise.all([
             getManagedTeam(supabase, user.id),
             fetchSettings(),
             getAuditLog(supabase),
             fetch("/api/admin-entries"),
+            fetchInviteStatuses(),
           ]);
-          setManagedUsers(team.users);
-          setManagedAdmins(team.admins);
-          setManagedViewers(team.viewers);
+          setManagedUsers(withStatuses(team.users, statuses));
+          setManagedAdmins(withStatuses(team.admins, statuses));
+          setManagedViewers(withStatuses(team.viewers, statuses));
           setAuditLog(log);
 
           const fetchedEntries = entriesRes.ok ? await entriesRes.json() : [];
@@ -530,6 +544,25 @@ export function useAppData() {
   [entries]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refreshManagedList = useCallback(async (role: "user" | "admin" | "viewer") => {
+    const statuses = await fetchInviteStatuses();
+    if (role === "admin") {
+      const admins = await getManagedAdmins(supabase, userId!);
+      setManagedAdmins(withStatuses(admins, statuses));
+    } else if (role === "viewer") {
+      const viewers = await supabase.from("profiles").select("user_id, name, email").eq("admin_id", userId!).eq("role", "viewer");
+      const list: ManagedUser[] = (viewers.data ?? []).map((p: Record<string, unknown>) => ({
+        id: p.user_id as string, name: (p.name as string) || (p.email as string) || "Unknown", email: (p.email as string) || "",
+        status: "pending", invitedAt: null,
+      }));
+      setManagedViewers(withStatuses(list, statuses));
+    } else {
+      const users = await getManagedUsers(supabase, userId!);
+      setManagedUsers(withStatuses(users, statuses));
+    }
+  }, [userId]); // supabase/setters are stable
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleInvite = useCallback(async (email: string, role: "user" | "admin" | "viewer", name?: string) => {
     const res = await fetch("/api/invite", {
       method: "POST",
@@ -540,19 +573,23 @@ export function useAppData() {
     if (!res.ok) { showToast(json.error ?? "Could not send invitation", "err"); return; }
     showToast(`Invitation sent to ${email}`);
     recordAudit("invite_sent", null, null, { email, role });
-    if (role === "admin") {
-      const admins = await getManagedAdmins(supabase, userId!);
-      setManagedAdmins(admins);
-    } else if (role === "viewer") {
-      const viewers = await supabase.from("profiles").select("user_id, name, email").eq("admin_id", userId!).eq("role", "viewer");
-      setManagedViewers((viewers.data ?? []).map((p: Record<string, unknown>) => ({
-        id: p.user_id as string, name: (p.name as string) || (p.email as string) || "Unknown", email: (p.email as string) || "",
-      })));
-    } else {
-      const users = await getManagedUsers(supabase, userId!);
-      setManagedUsers(users);
-    }
-  }, [userId]); // supabase/showToast/setters are stable
+    await refreshManagedList(role);
+  }, [refreshManagedList]); // supabase/showToast/recordAudit are stable
+
+  // Resends an invite email — used for invites that are still pending or have expired.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleResendInvite = useCallback(async (target: ManagedUser, role: "user" | "admin" | "viewer") => {
+    const res = await fetch("/api/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: target.email, role, name: target.name }),
+    });
+    const json = await res.json();
+    if (!res.ok) { showToast(json.error ?? "Could not resend invitation", "err"); return; }
+    showToast(`Invitation resent to ${target.email}`);
+    recordAudit("invite_resent", null, target.id, { email: target.email, role });
+    await refreshManagedList(role);
+  }, [refreshManagedList]); // supabase/showToast/recordAudit are stable
 
   // ── Invoice advance ────────────────────────────────────────────────────────
 
@@ -765,7 +802,7 @@ export function useAppData() {
     // handlers
     toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
-    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
+    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
     workerSettings, managedAdmins, clients,
     advanceInvoice, closeWeek, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,

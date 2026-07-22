@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import type { EntryTemplate, ManagedUser, Settings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/services/settings";
 import { createClient } from "@/lib/supabase";
+import { Bdg } from "./ui";
 
 interface WorkerRule {
   userId: string;
@@ -21,15 +22,17 @@ interface Props {
   workerSettings?: Record<string, Settings>;
   onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank" }[]) => void;
   onInvite?: (email: string, role: "user" | "admin" | "viewer", name?: string) => void;
+  onResendInvite?: (target: ManagedUser, role: "user" | "admin" | "viewer") => void;
 }
 
-export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedAdmins, managedViewers, workerSettings, onSaveWorkerRules, onInvite }: Props) {
+export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedAdmins, managedViewers, workerSettings, onSaveWorkerRules, onInvite, onResendInvite }: Props) {
   const [s, setS] = useState<Settings>({ ...DEFAULT_SETTINGS, ...settings });
   const [workerRules,    setWorkerRules]    = useState<WorkerRule[]>([]);
   const [inviteName,     setInviteName]     = useState("");
   const [inviteEmail,    setInviteEmail]    = useState("");
   const [inviteRole,     setInviteRole]     = useState<"user" | "admin" | "viewer">("user");
   const [inviteSending,  setInviteSending]  = useState(false);
+  const [resendingId,    setResendingId]    = useState<string | null>(null);
   const [newPwd,         setNewPwd]         = useState("");
   const [confirmPwd,     setConfirmPwd]     = useState("");
   const [pwdLoading,     setPwdLoading]     = useState(false);
@@ -39,6 +42,34 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
   const [activeTab, setActiveTab] = useState<"personal" | "rules" | "team" | "payment" | "company">(defaultTab as "personal" | "rules" | "team" | "payment" | "company");
 
   const f = (k: keyof Settings, v: string | number) => setS(prev => ({ ...prev, [k]: v }));
+
+  const resendInvite = async (u: ManagedUser, role: "user" | "admin" | "viewer") => {
+    if (resendingId) return;
+    setResendingId(u.id);
+    await onResendInvite?.(u, role);
+    setResendingId(null);
+  };
+
+  const statusCell = (u: ManagedUser, role: "user" | "admin" | "viewer") => (
+    <td>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        {u.status === "accepted" && <Bdg type="tfn">Accepted</Bdg>}
+        {u.status === "pending"  && <Bdg type="ot">Pending</Bdg>}
+        {u.status === "expired"  && <Bdg type="danger">Expired</Bdg>}
+        {u.status !== "accepted" && (
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ fontSize: 11, padding: "3px 9px" }}
+            disabled={resendingId === u.id}
+            onClick={() => resendInvite(u, role)}
+          >
+            {resendingId === u.id ? "Sending…" : "Resend"}
+          </button>
+        )}
+      </div>
+    </td>
+  );
 
   useEffect(() => { setS({ ...DEFAULT_SETTINGS, ...settings }); }, [settings]);
 
@@ -414,12 +445,13 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
               <>
                 <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8 }}>Co-admins</p>
                 <table className="data-table" style={{ marginBottom: 20 }}>
-                  <thead><tr><th>Name</th><th>Email</th></tr></thead>
+                  <thead><tr><th>Name</th><th>Email</th><th>Status</th></tr></thead>
                   <tbody>
                     {(managedAdmins ?? []).map(a => (
                       <tr key={a.id}>
                         <td style={{ fontWeight: 500 }}>{a.name}</td>
                         <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{a.email}</td>
+                        {statusCell(a, "admin")}
                       </tr>
                     ))}
                   </tbody>
@@ -431,12 +463,13 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
               <>
                 <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8 }}>Workers</p>
                 <table className="data-table">
-                  <thead><tr><th>Name</th><th>Email</th></tr></thead>
+                  <thead><tr><th>Name</th><th>Email</th><th>Status</th></tr></thead>
                   <tbody>
                     {(managedUsers ?? []).map(u => (
                       <tr key={u.id}>
                         <td style={{ fontWeight: 500 }}>{u.name}</td>
                         <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{u.email}</td>
+                        {statusCell(u, "user")}
                       </tr>
                     ))}
                   </tbody>
@@ -448,12 +481,13 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
               <>
                 <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8, marginTop: 20 }}>Viewers (accountants)</p>
                 <table className="data-table">
-                  <thead><tr><th>Name</th><th>Email</th></tr></thead>
+                  <thead><tr><th>Name</th><th>Email</th><th>Status</th></tr></thead>
                   <tbody>
                     {(managedViewers ?? []).map(v => (
                       <tr key={v.id}>
                         <td style={{ fontWeight: 500 }}>{v.name}</td>
                         <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{v.email}</td>
+                        {statusCell(v, "viewer")}
                       </tr>
                     ))}
                   </tbody>

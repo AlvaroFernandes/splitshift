@@ -31,10 +31,14 @@ async function resolveRootAdminId(supabase: SupabaseClient, adminId: string): Pr
 }
 
 function rowsToUsers(data: unknown[]): ManagedUser[] {
+  // Invite status is enriched afterwards from /api/invite (needs the service-role
+  // client to read auth.users); default to "pending" until that merge happens.
   return (data as Record<string, unknown>[]).map(p => ({
-    id:    p.user_id as string,
-    name:  (p.name as string) || (p.email as string) || "Unknown",
-    email: (p.email as string) || "",
+    id:        p.user_id as string,
+    name:      (p.name as string) || (p.email as string) || "Unknown",
+    email:     (p.email as string) || "",
+    status:    "pending" as const,
+    invitedAt: null,
   }));
 }
 

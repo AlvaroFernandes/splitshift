@@ -12,10 +12,14 @@ export interface Entry {
   ownerId?: string; // admin: the user_id who owns this entry
 }
 
+export type InviteStatus = "accepted" | "pending" | "expired";
+
 export interface ManagedUser {
   id: string;
   name: string;
   email: string;
+  status: InviteStatus;
+  invitedAt: string | null;
 }
 
 export type UserRole = "user" | "admin" | "viewer";

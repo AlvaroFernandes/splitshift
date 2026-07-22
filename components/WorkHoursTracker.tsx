@@ -32,7 +32,7 @@ export default function WorkHoursTracker() {
     processed, weeklyData, totals, tfnPct, chartProcessed, TABS, archivedEntries,
     toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
-    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite,
+    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
     workerSettings, managedAdmins, clients,
     advanceInvoice, closeWeek, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
@@ -176,6 +176,7 @@ export default function WorkHoursTracker() {
             workerSettings={workerSettings}
             onSaveWorkerRules={handleSaveWorkerRules}
             onInvite={handleInvite}
+            onResendInvite={handleResendInvite}
           />
         )}
       </main>
