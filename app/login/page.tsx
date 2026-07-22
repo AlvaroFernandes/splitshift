@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import { PasswordInput } from "@/components/PasswordInput";
 
 function LoginForm() {
   const supabase     = createClient();
@@ -79,14 +80,12 @@ function LoginForm() {
               boxSizing: "border-box",
             }}
           />
-          <input
-            type="password"
+          <PasswordInput
             placeholder="Password"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={setPassword}
             required
             style={{
-              width: "100%",
               padding: "9px 12px",
               fontSize: 14,
               background: "var(--color-background-secondary)",
@@ -94,7 +93,6 @@ function LoginForm() {
               borderRadius: "var(--border-radius-md)",
               color: "var(--color-text-primary)",
               outline: "none",
-              boxSizing: "border-box",
             }}
           />
           {error && (

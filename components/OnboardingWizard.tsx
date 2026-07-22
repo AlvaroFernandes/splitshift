@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { Settings } from "@/types";
 import { createClient } from "@/lib/supabase";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const WORKER_STEPS = ["Password", "Profile", "Work & Pay", "Invoicing"] as const;
 
@@ -12,15 +13,15 @@ function PasswordFields({ pwd, confirmPwd, pwdError, pwdLoading, onChange }: {
     <div className="form-grid">
       <div className="field full">
         <label htmlFor="ob-pwd">New password</label>
-        <input id="ob-pwd" type="password" placeholder="Min. 8 characters" autoFocus
+        <PasswordInput id="ob-pwd" placeholder="Min. 8 characters" autoFocus
           value={pwd} disabled={pwdLoading}
-          onChange={e => onChange("pwd", e.target.value)} />
+          onChange={v => onChange("pwd", v)} />
       </div>
       <div className="field full">
         <label htmlFor="ob-cpwd">Confirm password</label>
-        <input id="ob-cpwd" type="password" placeholder="Repeat password"
+        <PasswordInput id="ob-cpwd" placeholder="Repeat password"
           value={confirmPwd} disabled={pwdLoading}
-          onChange={e => onChange("confirm", e.target.value)} />
+          onChange={v => onChange("confirm", v)} />
       </div>
       {pwdError && (
         <p style={{ fontSize: 12, color: "var(--color-text-danger)", margin: 0, gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 5 }}>
