@@ -10,6 +10,7 @@ interface WorkerRule {
   tfnLimit: number;
   overtimeThreshold: number;
   excessMode: "abn" | "bank";
+  workerType: "office" | "site";
 }
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
   managedAdmins?: ManagedUser[];
   managedViewers?: ManagedUser[];
   workerSettings?: Record<string, Settings>;
-  onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank" }[]) => void;
+  onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[]) => void;
   onInvite?: (email: string, role: "user" | "admin" | "viewer", name?: string) => void;
   onResendInvite?: (target: ManagedUser, role: "user" | "admin" | "viewer") => void;
 }
@@ -81,12 +82,14 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
         tfnLimit:          workerSettings?.[u.id]?.tfnLimit          ?? 30,
         overtimeThreshold: workerSettings?.[u.id]?.overtimeThreshold ?? 12,
         excessMode:       (workerSettings?.[u.id]?.excessMode        ?? "abn") as "abn" | "bank",
+        workerType:       (workerSettings?.[u.id]?.workerType        ?? "site") as "office" | "site",
       }));
       if (prev.length === next.length &&
           prev.every((r, i) => r.userId === next[i].userId &&
                                r.tfnLimit === next[i].tfnLimit &&
                                r.overtimeThreshold === next[i].overtimeThreshold &&
-                               r.excessMode === next[i].excessMode))
+                               r.excessMode === next[i].excessMode &&
+                               r.workerType === next[i].workerType))
         return prev;
       return next;
     });
@@ -113,6 +116,9 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
 
   const updateRuleMode = (userId: string, val: "abn" | "bank") =>
     setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, excessMode: val } : r));
+
+  const updateRuleType = (userId: string, val: "office" | "site") =>
+    setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, workerType: val } : r));
 
   return (
     <div style={{ maxWidth: 600 }}>
@@ -309,7 +315,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
         {activeTab === "rules" && isAdmin && (
           <>
             <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 16 }}>
-              Set TFN hour limit and overtime threshold for each worker. These rules are applied independently per worker when calculating their hours and earnings.
+              Set TFN hour limit and overtime threshold for each worker. These rules are applied independently per worker when calculating their hours and earnings. For Hour Bank workers, choose whether they clock in/out only (Office) or use the full entry form (Site).
             </p>
             {workerRules.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>No managed workers found.</p>
@@ -321,6 +327,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                     <th>TFN hour limit</th>
                     <th>Overtime after (hrs/day)</th>
                     <th>Excess hours</th>
+                    <th>Worker type</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -363,6 +370,27 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                           <option value="abn">ABN Invoice</option>
                           <option value="bank">Hour Bank</option>
                         </select>
+                      </td>
+                      <td>
+                        {r.excessMode === "bank" ? (
+                          <select
+                            value={r.workerType}
+                            onChange={e => updateRuleType(r.userId, e.target.value as "office" | "site")}
+                            aria-label={`Worker type for ${r.name}`}
+                            style={{
+                              padding: "4px 8px", fontSize: 12,
+                              border: "0.5px solid var(--color-border-secondary)",
+                              borderRadius: "var(--border-radius-md)",
+                              background: "var(--color-background-secondary)",
+                              color: "var(--color-text-primary)",
+                            }}
+                          >
+                            <option value="office">Office (clock in/out only)</option>
+                            <option value="site">Site (full entry form)</option>
+                          </select>
+                        ) : (
+                          <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>—</span>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -398,12 +398,12 @@ export function useAppData() {
   }, [userId, periodStart, periodEnd]); // saveSettings/showToast/setSettings are stable
 
   const handleSaveWorkerRules = useCallback(async (
-    rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank" }[],
+    rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[],
   ) => {
     const results = await Promise.all(
-      rules.map(({ userId: wid, tfnLimit, overtimeThreshold, excessMode }) => {
+      rules.map(({ userId: wid, tfnLimit, overtimeThreshold, excessMode, workerType }) => {
         const existing = workerSettings[wid] ?? DEFAULT_SETTINGS;
-        const updated  = { ...existing, tfnLimit, overtimeThreshold, excessMode };
+        const updated  = { ...existing, tfnLimit, overtimeThreshold, excessMode, workerType };
         setWorkerSettings(prev => ({ ...prev, [wid]: updated }));
         return saveWorkerSettingsSvc(supabase, wid, updated);
       })

@@ -135,7 +135,8 @@ export default function WorkHoursTracker() {
         {tab === "log" && userRole !== "admin" && (
           <LogEntry key={editEntry?.id ?? "new"} editEntry={editEntry}
             onSave={handleSave} onCancel={handleCancelEdit} clients={clients}
-            templates={settings.templates ?? []} onSaveTemplate={handleSaveTemplate} />
+            templates={settings.templates ?? []} onSaveTemplate={handleSaveTemplate}
+            settings={settings} />
         )}
         {tab === "entries" && (
           <EntriesList processed={processed} archivedProcessed={archivedEntries} onEdit={handleEdit} onDelete={handleDelete}

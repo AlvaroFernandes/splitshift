@@ -79,6 +79,7 @@ export interface Settings {
   tfnLimit: number;
   overtimeThreshold: number;
   excessMode?: "abn" | "bank";
+  workerType?: "office" | "site";
   pdfNamePattern: string;
   templates?: EntryTemplate[];
   reminderEnabled?: boolean;

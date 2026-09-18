@@ -1,16 +1,24 @@
 import React from "react";
-import type { Entry, EntryTemplate, FormState } from "@/types";
+import type { Entry, EntryTemplate, FormState, Settings } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc, todayStr } from "@/lib/formatters";
 
-export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCancel, clients, templates, onSaveTemplate }: {
+const OFFICE_JOB_DESCRIPTION = "Office hours";
+
+export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCancel, clients, templates, onSaveTemplate, settings }: {
   editEntry?: Entry | null;
   onSave: (formData: FormState) => Promise<boolean>;
   onCancel: () => void;
   clients?: string[];
   templates?: EntryTemplate[];
   onSaveTemplate?: (formData: FormState) => void;
+  settings: Settings;
 }) {
+  // Hour-bank workers marked "office" only clock in/out + break — no job
+  // description, client or rate, since bank hours aren't billed per entry.
+  const isOfficeBank = settings.excessMode === "bank" && settings.workerType === "office";
+  const officeDefaultRate = settings.tfnRate || settings.defaultRate || "0";
+
   const [form, setForm] = React.useState<FormState>(() =>
     editEntry
       ? {
@@ -23,7 +31,12 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
           client:         editEntry.client ?? "",
           officeHours:    editEntry.officeHours ?? false,
         }
-      : { date: todayStr(), jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "", officeHours: false }
+      : {
+          date: todayStr(), jobDescription: isOfficeBank ? OFFICE_JOB_DESCRIPTION : "",
+          startTime: "", endTime: "",
+          hourlyRate: isOfficeBank ? officeDefaultRate : "", breakMins: "", client: "",
+          officeHours: isOfficeBank,
+        }
   );
 
   const { breakMinsNum, previewRaw, previewActual, previewH, previewEarn } = React.useMemo(() => {
@@ -55,15 +68,20 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
     const ok = await onSave(form);
     setIsSaving(false);
     if (ok && !editEntry) {
-      setForm(prev => ({ date: prev.date, jobDescription: "", startTime: "", endTime: "", hourlyRate: "", breakMins: "", client: "", officeHours: false }));
+      setForm(prev => ({
+        date: prev.date, jobDescription: isOfficeBank ? OFFICE_JOB_DESCRIPTION : "",
+        startTime: "", endTime: "",
+        hourlyRate: isOfficeBank ? officeDefaultRate : "", breakMins: "", client: "",
+        officeHours: isOfficeBank,
+      }));
     }
-  }, [form, onSave, editEntry, isSaving]);
+  }, [form, onSave, editEntry, isSaving, isOfficeBank, officeDefaultRate]);
 
   return (
     <div>
       <h2 className="sr-only">{editEntry ? "Edit entry" : "Log work hours"}</h2>
 
-      {!editEntry && templates && templates.length > 0 && (
+      {!isOfficeBank && !editEntry && templates && templates.length > 0 && (
         <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>Quick fill:</span>
           {templates.map(t => (
@@ -107,27 +125,33 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
           </div>
         )}
         <div className="form-grid">
-          <div className="field full">
-            <label htmlFor="f-desc">Job description</label>
-            <input id="f-desc" type="text" placeholder="What did you work on?" value={form.jobDescription} onChange={e => f("jobDescription", e.target.value)} />
-          </div>
-          <div className="field full">
-            <label htmlFor="f-client">Client / Project <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
-            <input id="f-client" type="text" list="f-client-list" placeholder="e.g. Acme Corp" value={form.client} onChange={e => f("client", e.target.value)} />
-            {clients && clients.length > 0 && (
-              <datalist id="f-client-list">
-                {clients.map(c => <option key={c} value={c} />)}
-              </datalist>
-            )}
-          </div>
+          {!isOfficeBank && (
+            <>
+              <div className="field full">
+                <label htmlFor="f-desc">Job description</label>
+                <input id="f-desc" type="text" placeholder="What did you work on?" value={form.jobDescription} onChange={e => f("jobDescription", e.target.value)} />
+              </div>
+              <div className="field full">
+                <label htmlFor="f-client">Client / Project <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                <input id="f-client" type="text" list="f-client-list" placeholder="e.g. Acme Corp" value={form.client} onChange={e => f("client", e.target.value)} />
+                {clients && clients.length > 0 && (
+                  <datalist id="f-client-list">
+                    {clients.map(c => <option key={c} value={c} />)}
+                  </datalist>
+                )}
+              </div>
+            </>
+          )}
           <div className="field">
             <label htmlFor="f-date">Date</label>
             <input id="f-date" type="date" value={form.date} disabled={!!editEntry?.archived} onChange={e => f("date", e.target.value)} />
           </div>
-          <div className="field">
-            <label htmlFor="f-rate">Hourly rate (AUD)</label>
-            <input id="f-rate" type="number" min="0" step="0.01" placeholder="0.00" value={form.hourlyRate} onChange={e => f("hourlyRate", e.target.value)} />
-          </div>
+          {!isOfficeBank && (
+            <div className="field">
+              <label htmlFor="f-rate">Hourly rate (AUD)</label>
+              <input id="f-rate" type="number" min="0" step="0.01" placeholder="0.00" value={form.hourlyRate} onChange={e => f("hourlyRate", e.target.value)} />
+            </div>
+          )}
           <div className="field">
             <label htmlFor="f-start">Start time</label>
             <input id="f-start" type="time" value={form.startTime} onChange={e => f("startTime", e.target.value)} />
@@ -140,23 +164,25 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
             <label htmlFor="f-break">Break (mins, unpaid)</label>
             <input id="f-break" type="number" min="0" step="5" placeholder="0" value={form.breakMins} onChange={e => f("breakMins", e.target.value)} />
           </div>
-          <div className="field full">
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={form.officeHours === true}
-                onChange={() => setForm(prev => ({ ...prev, officeHours: !prev.officeHours }))}
-              />
-              Office hours
-              <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-text-tertiary)" }}>(no 4-hour minimum call — billed as worked)</span>
-            </label>
-          </div>
+          {!isOfficeBank && (
+            <div className="field full">
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.officeHours === true}
+                  onChange={() => setForm(prev => ({ ...prev, officeHours: !prev.officeHours }))}
+                />
+                Office hours
+                <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-text-tertiary)" }}>(no 4-hour minimum call — billed as worked)</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {previewRaw > 0 && (
           <div className="preview-box">
             <span>
-              <span className="muted">On site: </span>
+              <span className="muted">{isOfficeBank ? "Worked: " : "On site: "}</span>
               <strong className="mono">{fh(previewRaw)}</strong>
               {breakMinsNum > 0 && (
                 <span className="muted"> − {breakMinsNum}m break = <strong className="mono">{fh(previewActual)}</strong></span>
@@ -165,7 +191,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
                 <span className="muted"> → billed <strong className="mono" style={{ color: "var(--color-text-warning)" }}>{fh(previewH)}</strong> (min. call)</span>
               )}
             </span>
-            {previewH > 12 && (
+            {!isOfficeBank && previewH > 12 && (
               <span>
                 <span className="muted">Overtime: </span>
                 <strong className="mono" style={{ color: "var(--color-text-warning)" }}>
@@ -173,12 +199,14 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
                 </strong>
               </span>
             )}
-            <span>
-              <span className="muted">Est. earnings: </span>
-              <strong className="mono" style={{ color: "var(--color-text-success)" }}>
-                {fc(previewEarn)}
-              </strong>
-            </span>
+            {!isOfficeBank && (
+              <span>
+                <span className="muted">Est. earnings: </span>
+                <strong className="mono" style={{ color: "var(--color-text-success)" }}>
+                  {fc(previewEarn)}
+                </strong>
+              </span>
+            )}
           </div>
         )}
 
@@ -192,12 +220,12 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
               <i className="ti ti-x" aria-hidden="true" />
               Cancel
             </button>
-          ) : (
+          ) : !isOfficeBank ? (
             <button className="btn-secondary" onClick={() => onSaveTemplate?.(form)} title="Save current fields as a reusable template">
               <i className="ti ti-bookmark" aria-hidden="true" />
               Save as template
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

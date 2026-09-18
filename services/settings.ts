@@ -7,7 +7,7 @@ export const DEFAULT_SETTINGS: Settings = {
   invoicePrefix: "INV", invoiceNum: 1, invoiceDate: "", invoiceItems: [],
   companyName: "", companyAbn: "", companyAddress: "", companyEmail: "",
   bankName: "", bsb: "", accountNumber: "", invoiceNotes: "",
-  tfnLimit: 30, overtimeThreshold: 12,
+  tfnLimit: 30, overtimeThreshold: 12, workerType: "site",
   pdfNamePattern: "Invoice-{num}-{company}-{date}",
 };
 
