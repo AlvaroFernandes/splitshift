@@ -162,6 +162,64 @@ const WORKERS = [
     jobs: ["Brand identity design","UI/UX mockups","Social media asset creation","Pitch deck design","Print collateral","Motion graphics","Design system documentation"],
     client: "Creative Studio Co",
   },
+  // Hour Bank — Site: excess hours bank instead of going to an ABN invoice,
+  // but still logs full entries (job description, client, rate) like the
+  // ABN workers above.
+  {
+    name:   "Liam Carter",
+    email:  "liam.carter@demo.splitshift.com.au",
+    settings: {
+      yourName: "Liam Carter",
+      yourAddress: "9 Wattle St, Parramatta NSW 2150",
+      yourPhone: "0456 789 012",
+      yourEmail: "liam.carter@demo.splitshift.com.au",
+      defaultRate: "45",
+      tfnRate: "45",
+      tfnLimit: 38,
+      overtimeThreshold: 8,
+      excessMode: "bank",
+      workerType: "site",
+      companyName: "BuildRight Constructions",
+      companyAbn: "22 091 554 439",
+      companyAddress: "1 George St, Sydney NSW 2000",
+      pdfNamePattern: "Invoice-{num}-{company}-{date}",
+    },
+    schedule: [[0,"07:00","15:30",30],[1,"07:00","15:30",30],[2,"07:00","15:30",30],[3,"07:00","15:30",30],[4,"07:00","15:30",30]],
+    rate: 45,
+    jobs: ["Electrical rough-in","Cabling and conduit runs","Switchboard installation","Fault finding","Fit-off and testing"],
+    client: "BuildRight Constructions",
+  },
+  // Hour Bank — Office: simplified clock-in/out entries only (no job
+  // description, client or per-entry rate — see components/LogEntry.tsx).
+  {
+    name:   "Olivia Bennett",
+    email:  "olivia.bennett@demo.splitshift.com.au",
+    settings: {
+      yourName: "Olivia Bennett",
+      yourAddress: "40 King St, Newtown NSW 2042",
+      yourPhone: "0467 890 123",
+      yourEmail: "olivia.bennett@demo.splitshift.com.au",
+      defaultRate: "32",
+      tfnRate: "32",
+      tfnLimit: 38,
+      overtimeThreshold: 8,
+      excessMode: "bank",
+      workerType: "office",
+      companyName: "BuildRight Constructions",
+      companyAbn: "22 091 554 439",
+      companyAddress: "1 George St, Sydney NSW 2000",
+      pdfNamePattern: "Invoice-{num}-{company}-{date}",
+    },
+    schedule: [[0,"09:00","17:00",60],[1,"09:00","17:00",60],[2,"09:00","17:00",60],[3,"09:00","17:00",60],[4,"09:00","17:00",60]],
+    rate: 32,
+    officeClock: true, // forces fixed job description, no client, office_hours on every entry
+  },
+];
+
+// Viewer (accountant) — read-only access to the admin's whole team, no
+// entries or settings of their own.
+const VIEWERS = [
+  { name: "Priya Nair", email: "priya.nair@demo.splitshift.com.au" },
 ];
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -178,8 +236,8 @@ async function main() {
   const adminId = adminProfile.user_id;
   console.log(`Admin found: ${adminEmail} (${adminId})`);
 
-  // 2. Clean up any existing demo workers
-  const demoEmails = WORKERS.map(w => w.email);
+  // 2. Clean up any existing demo workers/viewers
+  const demoEmails = [...WORKERS.map(w => w.email), ...VIEWERS.map(v => v.email)];
   const { data: existing } = await supabase
     .from("profiles").select("user_id").in("email", demoEmails);
   if (existing?.length) {
@@ -233,14 +291,14 @@ async function main() {
           id:              randomUUID(),
           user_id:         workerId,
           date:            dateStr(day),
-          job_description: worker.jobs[jobIdx % worker.jobs.length],
+          job_description: worker.officeClock ? "Office hours" : worker.jobs[jobIdx % worker.jobs.length],
           start_time:      start,
           end_time:        end,
           hourly_rate:     worker.rate,
           break_mins:      brk,
           archived:        false,
-          office_hours:    false,
-          client:          worker.client,
+          office_hours:    !!worker.officeClock,
+          client:          worker.officeClock ? null : worker.client,
           deleted_at:      null,
         });
         jobIdx++;
@@ -250,6 +308,27 @@ async function main() {
     const { error } = await supabase.from("entries").insert(entries);
     if (error) console.error(`Entries error for ${worker.name}:`, error.message);
     else console.log(`✓ ${worker.name} — ${entries.length} entries created`);
+  }
+
+  // 6. Create viewer (accountant) accounts — read-only, no settings/entries
+  for (const viewer of VIEWERS) {
+    const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
+      email:         viewer.email,
+      password:      "Demo@SplitShift2026!",
+      email_confirm: true,
+      user_metadata: { invited_role: "viewer", invited_by: adminId },
+    });
+    if (authErr) { console.error(`Auth error for ${viewer.name}:`, authErr.message); continue; }
+
+    await supabase.from("profiles").upsert({
+      user_id:  authData.user.id,
+      name:     viewer.name,
+      email:    viewer.email,
+      role:     "viewer",
+      admin_id: adminId,
+    }, { onConflict: "user_id" });
+
+    console.log(`✓ ${viewer.name} — viewer account created`);
   }
 
   console.log("\nDemo data seeded successfully. Log in as admin to see all workers.");
