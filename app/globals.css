@@ -130,6 +130,7 @@
 .report-label{font-size:18px;font-weight:500;letter-spacing:-.2px}
 .report-label.tfn{color:var(--color-text-success)}
 .report-label.abn{color:var(--color-text-info)}
+.report-label.bank{color:var(--color-text-bank)}
 .totals-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
 .invoice-totals{display:flex;justify-content:flex-end;margin-top:10px}
 .invoice-totals-inner{min-width:260px}
@@ -171,6 +172,7 @@
   body{font-size:12px;color:#111}
   .report-label.tfn{color:#16a34a}
   .report-label.abn{color:#1d4ed8}
+  .report-label.bank{color:#7c3aed}
   .mono{font-family:Courier,monospace}
   .muted{color:#666}
   .invoice-doc{border:none;border-radius:0;padding:0;max-width:100%;box-shadow:none}

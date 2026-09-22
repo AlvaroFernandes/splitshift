@@ -532,10 +532,12 @@ export function useAppData() {
       { id: "entries",   label: "Entries",      icon: "ti-list"             },
       { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
       { id: "tfn",       label: "TFN Report",   icon: "ti-report"           },
-      ...(!isBank ? [
+      ...(isBank ? [
+        { id: "bank",    label: "Hour Bank",    icon: "ti-clock-dollar"     },
+      ] : [
         { id: "abn",     label: "ABN Invoice",  icon: "ti-receipt"          },
         { id: "history", label: "Invoices",     icon: "ti-history"          },
-      ] : []),
+      ]),
     ];
   }, [userRole, settings.excessMode]);
 
@@ -656,11 +658,14 @@ export function useAppData() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, processed, allPeriodEntries, userId, periodStart, periodEnd]); // supabase/showToast/setters stable
 
-  // Closes a week that never exceeded the TFN limit (no ABN/bank excess), so it
-  // drops out of the active period without going through the invoice flow.
+  // Closes a week that never exceeded the TFN limit, so it drops out of the
+  // active period without going through the invoice flow. Hour-bank workers
+  // have no invoice flow at all — their excess hours just accrue in the bank,
+  // so a week with bank hours is still closeable.
   const closeWeek = useCallback(async (ws: string) => {
     const weekEntries = weeklyData.filter(e => weekStart(e.date) === ws);
-    const exceeded = weekEntries.some(e => e.abnPortion > 0 || e.bankHours > 0);
+    const isBank  = settings.excessMode === "bank";
+    const exceeded = !isBank && weekEntries.some(e => e.abnPortion > 0);
     if (exceeded) { showToast("This week has hours over the limit — invoice required", "err"); return; }
 
     const toCloseIds = weekEntries.filter(e => !e.archived).map(e => e.id);
@@ -673,7 +678,7 @@ export function useAppData() {
     setEntries(prev => prev.map(e => toCloseIds.includes(e.id) ? { ...e, archived: true } : e));
     showToast("Week closed — no invoice needed");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyData, userId]); // supabase/showToast/setters stable
+  }, [weeklyData, userId, settings.excessMode]); // supabase/showToast/setters stable
 
   const handleCancelEdit = useCallback(() => {
     setEditId(null);

@@ -29,12 +29,14 @@ interface WeekSummary {
   overtime: number;
   tfnHours: number;
   abnHours: number;
+  bankHours: number;
+  accumulated: number; // running bank balance across the weeks in this report
   tfnEarnings: number;
   abnEarnings: number;
   total: number;
 }
 
-function WeekTimesheetDoc({ week, settings }: { week: WeekSummary; settings: Settings }) {
+function WeekTimesheetDoc({ week, settings, isBank }: { week: WeekSummary; settings: Settings; isBank?: boolean }) {
   const sorted = [...week.entries].sort((a, b) =>
     a.date !== b.date ? a.date.localeCompare(b.date) : a.startTime.localeCompare(b.startTime)
   );
@@ -71,7 +73,7 @@ function WeekTimesheetDoc({ week, settings }: { week: WeekSummary; settings: Set
             <th style={{ textAlign: "right" }}>Break</th>
             <th style={{ textAlign: "right" }}>Hours</th>
             <th style={{ textAlign: "right" }}>TFN hrs</th>
-            <th style={{ textAlign: "right" }}>ABN hrs</th>
+            <th style={{ textAlign: "right" }}>{isBank ? "Banked" : "ABN hrs"}</th>
             <th style={{ textAlign: "right" }}>OT hrs</th>
           </tr>
         </thead>
@@ -85,7 +87,7 @@ function WeekTimesheetDoc({ week, settings }: { week: WeekSummary; settings: Set
               <td style={{ textAlign: "right", color: e.breakMins > 0 ? undefined : "#999" }}>{e.breakMins > 0 ? `${e.breakMins}m` : "—"}</td>
               <td style={{ textAlign: "right", fontWeight: 600 }}>{e.total.toFixed(2)}</td>
               <td style={{ textAlign: "right", color: e.tfnPortion > 0 ? "#16a34a" : "#999" }}>{e.tfnPortion > 0 ? e.tfnPortion.toFixed(2) : "—"}</td>
-              <td style={{ textAlign: "right", color: e.abnPortion > 0 ? "#1d4ed8" : "#999" }}>{e.abnPortion > 0 ? e.abnPortion.toFixed(2) : "—"}</td>
+              <td style={{ textAlign: "right", color: e.abnPortion > 0 ? (isBank ? "#7c3aed" : "#1d4ed8") : "#999" }}>{e.abnPortion > 0 ? e.abnPortion.toFixed(2) : "—"}</td>
               <td style={{ textAlign: "right", color: e.overtime   > 0 ? "#d97706" : "#999" }}>{e.overtime   > 0 ? e.overtime.toFixed(2)   : "—"}</td>
             </tr>
           ))}
@@ -97,7 +99,14 @@ function WeekTimesheetDoc({ week, settings }: { week: WeekSummary; settings: Set
         <div className="inv-totals-line"><span>Regular hours</span><span>{week.regular.toFixed(2)}</span></div>
         {week.overtime > 0 && <div className="inv-totals-line"><span>Overtime hours (×1.5)</span><span>{week.overtime.toFixed(2)}</span></div>}
         {week.tfnHours > 0 && <div className="inv-totals-line"><span style={{ color: "#16a34a" }}>TFN hours</span><span>{week.tfnHours.toFixed(2)}</span></div>}
-        {week.abnHours > 0 && <div className="inv-totals-line"><span style={{ color: "#1d4ed8" }}>ABN hours</span><span>{week.abnHours.toFixed(2)}</span></div>}
+        {isBank ? (
+          <>
+            {week.bankHours > 0 && <div className="inv-totals-line"><span style={{ color: "#7c3aed" }}>Banked hours</span><span>{week.bankHours.toFixed(2)}</span></div>}
+            <div className="inv-totals-line"><span style={{ color: "#7c3aed" }}>Accumulated bank</span><span>{week.accumulated.toFixed(2)}</span></div>
+          </>
+        ) : (
+          week.abnHours > 0 && <div className="inv-totals-line"><span style={{ color: "#1d4ed8" }}>ABN hours</span><span>{week.abnHours.toFixed(2)}</span></div>
+        )}
         {week.breakMinsTotal > 0 && <div className="inv-totals-line"><span>Total break</span><span>{week.breakMinsTotal}m</span></div>}
         <div className="inv-totals-line total"><span>Total billed hours</span><span>{week.hours.toFixed(2)}</span></div>
       </div>
@@ -123,6 +132,11 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
   const [deletingId,    setDeletingId]    = React.useState<string | null>(null);
 
   const canEdit = !isReadOnly && (onEdit || onDelete);
+
+  // Hour-bank workers have no ABN side: excess hours accrue in their bank
+  // instead of being invoiced. Admins keep the combined view — their team can
+  // mix both modes.
+  const isBank = !isAdmin && settings.excessMode === "bank";
 
   const handleDeleteClick = async (id: string) => {
     if (!onDelete) return;
@@ -155,11 +169,16 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
         overtime:       a.overtime       + e.overtime,
         tfnHours:       a.tfnHours       + e.tfnPortion,
         abnHours:       a.abnHours       + e.abnPortion,
+        bankHours:      a.bankHours      + e.bankHours,
+        accumulated:    0,
         tfnEarnings:    a.tfnEarnings    + e.tfnEarnings,
         abnEarnings:    a.abnEarnings    + e.abnEarnings,
         total:          a.total          + e.totalEarnings,
-      }), { weekStart: ws, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, tfnEarnings:0, abnEarnings:0, total:0 });
+      }), { weekStart: ws, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, abnEarnings:0, total:0 });
     });
+
+    // Running bank balance across the weeks shown
+    weeks.forEach((w, i) => { w.accumulated = (weeks[i - 1]?.accumulated ?? 0) + w.bankHours; });
 
     const grandTotal = weeks.reduce<Omit<WeekSummary, "weekStart"|"entries">>((a, w) => ({
       hours:          a.hours          + w.hours,
@@ -168,10 +187,12 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       overtime:       a.overtime       + w.overtime,
       tfnHours:       a.tfnHours       + w.tfnHours,
       abnHours:       a.abnHours       + w.abnHours,
+      bankHours:      a.bankHours      + w.bankHours,
+      accumulated:    a.accumulated    + w.bankHours,
       tfnEarnings:    a.tfnEarnings    + w.tfnEarnings,
       abnEarnings:    a.abnEarnings    + w.abnEarnings,
       total:          a.total          + w.total,
-    }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, tfnEarnings:0, abnEarnings:0, total:0 });
+    }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, abnEarnings:0, total:0 });
 
     return { weeks, grandTotal };
   }, [visible]);
@@ -213,7 +234,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
             {downloading ? "Generating…" : "Download PDF"}
           </button>
         </div>
-        <WeekTimesheetDoc week={selectedWeek} settings={settings} />
+        <WeekTimesheetDoc week={selectedWeek} settings={settings} isBank={isBank} />
       </div>
     );
   }
@@ -249,10 +270,20 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               <th>Regular</th>
               <th>Overtime</th>
               <th>TFN hrs</th>
-              <th>ABN hrs</th>
-              <th>TFN earnings</th>
-              <th>ABN earnings</th>
-              <th>Total</th>
+              {isBank ? (
+                <>
+                  <th>Banked</th>
+                  <th>Accumulated</th>
+                  <th>Earnings</th>
+                </>
+              ) : (
+                <>
+                  <th>ABN hrs</th>
+                  <th>TFN earnings</th>
+                  <th>ABN earnings</th>
+                  <th>Total</th>
+                </>
+              )}
               <th></th>
             </tr>
           </thead>
@@ -274,10 +305,20 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                   <td className="mono">{fh(w.regular)}</td>
                   <td className="mono">{w.overtime > 0 ? <Bdg type="ot">{fh(w.overtime)}</Bdg> : <span className="muted">—</span>}</td>
                   <td className="mono">{w.tfnHours > 0 ? <Bdg type="tfn">{fh(w.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
-                  <td className="mono">{w.abnHours > 0 ? <Bdg type="abn">{fh(w.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
-                  <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>
-                  <td className="mono" style={{ color: "var(--color-text-info)" }}>{fc(w.abnEarnings)}</td>
-                  <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>
+                  {isBank ? (
+                    <>
+                      <td className="mono">{w.bankHours > 0 ? <Bdg type="bank">+{fh(w.bankHours)}</Bdg> : <span className="muted">—</span>}</td>
+                      <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-bank)" }}>{fh(w.accumulated)}</td>
+                      <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="mono">{w.abnHours > 0 ? <Bdg type="abn">{fh(w.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
+                      <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>
+                      <td className="mono" style={{ color: "var(--color-text-info)" }}>{fc(w.abnEarnings)}</td>
+                      <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>
+                    </>
+                  )}
                   <td>
                     <span style={{ display: "flex", gap: 4 }}>
                       {!isAdmin && (
@@ -329,10 +370,20 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                     </td>
                     <td>{e.overtime > 0 ? <Bdg type="ot">{fh(e.overtime)}</Bdg> : <span className="muted">—</span>}</td>
                     <td>{e.tfnPortion > 0 ? <Bdg type="tfn">{fh(e.tfnPortion)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td>{e.abnPortion > 0 ? <Bdg type="abn">{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>
-                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{fc(e.abnEarnings)}</td>
-                    <td className="mono" style={{ fontSize: 12 }}>{fc(e.totalEarnings)}</td>
+                    {isBank ? (
+                      <>
+                        <td>{e.bankHours > 0 ? <Bdg type="bank">+{fh(e.bankHours)}</Bdg> : <span className="muted">—</span>}</td>
+                        <td />
+                        <td className="mono" style={{ fontSize: 12 }}>{fc(e.totalEarnings)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td>{e.abnPortion > 0 ? <Bdg type="abn">{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>
+                        <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>
+                        <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{fc(e.abnEarnings)}</td>
+                        <td className="mono" style={{ fontSize: 12 }}>{fc(e.totalEarnings)}</td>
+                      </>
+                    )}
                     <td>
                       {canEdit && (
                         <span style={{ display: "flex", gap: 4 }}>
@@ -375,10 +426,20 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               <td className="mono">{fh(grandTotal.regular)}</td>
               <td className="mono">{grandTotal.overtime > 0 ? <Bdg type="ot">{fh(grandTotal.overtime)}</Bdg> : <span className="muted">—</span>}</td>
               <td className="mono">{grandTotal.tfnHours > 0 ? <Bdg type="tfn">{fh(grandTotal.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
-              <td className="mono">{grandTotal.abnHours > 0 ? <Bdg type="abn">{fh(grandTotal.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
-              <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>
-              <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>
-              <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>
+              {isBank ? (
+                <>
+                  <td className="mono">{grandTotal.bankHours > 0 ? <Bdg type="bank">+{fh(grandTotal.bankHours)}</Bdg> : <span className="muted">—</span>}</td>
+                  <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-bank)" }}>{fh(grandTotal.accumulated)}</td>
+                  <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>
+                </>
+              ) : (
+                <>
+                  <td className="mono">{grandTotal.abnHours > 0 ? <Bdg type="abn">{fh(grandTotal.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
+                  <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>
+                  <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>
+                  <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>
+                </>
+              )}
               <td />
             </tr>
           </tfoot>

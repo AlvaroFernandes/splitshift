@@ -31,12 +31,14 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
   }
   const weeks = [...weekMap.entries()].sort(([a], [b]) => a.localeCompare(b));
 
-  // A week can be closed without an invoice only if none of its entries (TFN
-  // or not) exceeded the admin's hour limit — i.e. no ABN or bank-hour excess.
+  // A week can be closed without an invoice only if none of its entries
+  // exceeded the admin's hour limit. Hour-bank workers have no invoice flow —
+  // excess hours just accrue in their bank — so bank hours never block closing.
+  const isBank = settings.excessMode === "bank";
   const weekExceeded = new Map<string, boolean>();
   for (const e of processed) {
     const ws = weekStart(e.date);
-    if (e.abnPortion > 0 || e.bankHours > 0) weekExceeded.set(ws, true);
+    if (!isBank && e.abnPortion > 0) weekExceeded.set(ws, true);
     else if (!weekExceeded.has(ws)) weekExceeded.set(ws, false);
   }
 
@@ -99,7 +101,7 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                         style={{ fontSize: 12, padding: "4px 10px" }}
                         disabled={closingWeek === ws}
                         onClick={() => handleClose(ws)}
-                        title="Under the weekly hour limit — no ABN invoice needed"
+                        title={isBank ? "Excess hours banked automatically — no invoice needed" : "Under the weekly hour limit — no ABN invoice needed"}
                       >
                         <i className={`ti ${closingWeek === ws ? "ti-loader-2" : "ti-lock-check"}`} aria-hidden="true" />
                         {closingWeek === ws ? "Closing…" : "Close week — no invoice"}

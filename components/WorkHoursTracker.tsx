@@ -8,6 +8,7 @@ import { EntriesList }    from "./EntriesList";
 import { WeeklyReport }   from "./WeeklyReport";
 import { TFNReport }      from "./TFNReport";
 import { ABNInvoice }     from "./ABNInvoice";
+import { HourBank }       from "./HourBank";
 import { InvoiceHistory } from "./InvoiceHistory";
 import { AdminEditModal }    from "./AdminEditModal";
 import { SettingsPage }      from "./SettingsPage";
@@ -152,6 +153,10 @@ export default function WorkHoursTracker() {
         {tab === "tfn" && userRole !== "admin" && (
           <TFNReport processed={processed} totals={totals} settings={settings}
             periodStart={periodStart} periodEnd={periodEnd} onCloseWeek={closeWeek} />
+        )}
+        {tab === "bank" && userRole !== "admin" && (
+          <HourBank allProcessed={chartProcessed} periodProcessed={processed} settings={settings}
+            periodStart={periodStart} periodEnd={periodEnd} />
         )}
         {tab === "abn" && userRole !== "admin" && (
           <ABNInvoice processed={processed} settings={settings}
