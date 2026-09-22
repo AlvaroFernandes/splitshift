@@ -407,14 +407,17 @@ export function useAppData() {
     // Detect ABN <-> Hour Bank switches before overwriting, so they can be
     // logged individually — a generic "rules saved" entry doesn't tell an
     // admin looking back which worker changed mode, or when.
-    const modeChanges: { workerId: string; workerName: string; from: "abn" | "bank"; to: "abn" | "bank" }[] = [];
+    const modeChanges: { workerId: string; workerName: string; from: "abn" | "bank"; to: "abn" | "bank"; fromTfnLimit: number; toTfnLimit: number }[] = [];
     const results = await Promise.all(
       rules.map(({ userId: wid, tfnLimit, overtimeThreshold, excessMode, workerType }) => {
         const existing     = workerSettings[wid] ?? DEFAULT_SETTINGS;
         const previousMode = existing.excessMode ?? "abn";
         if (previousMode !== excessMode) {
           const workerName = managedUsersRef.current.find(u => u.id === wid)?.name ?? "worker";
-          modeChanges.push({ workerId: wid, workerName, from: previousMode, to: excessMode });
+          modeChanges.push({
+            workerId: wid, workerName, from: previousMode, to: excessMode,
+            fromTfnLimit: existing.tfnLimit ?? 30, toTfnLimit: tfnLimit,
+          });
         }
         const updated = { ...existing, tfnLimit, overtimeThreshold, excessMode, workerType };
         setWorkerSettings(prev => ({ ...prev, [wid]: updated }));
@@ -428,6 +431,7 @@ export function useAppData() {
       for (const change of modeChanges) {
         recordAudit("worker_mode_changed", "worker", change.workerId, {
           workerName: change.workerName, from: change.from, to: change.to,
+          fromTfnLimit: change.fromTfnLimit, toTfnLimit: change.toTfnLimit,
         });
       }
     }

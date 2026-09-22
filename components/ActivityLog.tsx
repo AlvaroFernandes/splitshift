@@ -40,7 +40,11 @@ const ACTION_DEFS: Record<string, ActionDef> = {
   worker_mode_changed: {
     icon:  "ti-arrows-exchange",
     color: "var(--color-text-bank)",
-    label: m => `Switched ${m.workerName ?? "worker"} from ${m.from === "bank" ? "Hour Bank" : "ABN"} to ${m.to === "bank" ? "Hour Bank" : "ABN"}`,
+    label: m => {
+      const base = `Switched ${m.workerName ?? "worker"} from ${m.from === "bank" ? "Hour Bank" : "ABN"} to ${m.to === "bank" ? "Hour Bank" : "ABN"}`;
+      const limitChanged = m.fromTfnLimit !== undefined && m.toTfnLimit !== undefined && m.fromTfnLimit !== m.toTfnLimit;
+      return limitChanged ? `${base} (limit ${m.fromTfnLimit}h → ${m.toTfnLimit}h)` : base;
+    },
   },
 };
 
