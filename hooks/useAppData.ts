@@ -7,7 +7,7 @@ import type {
   AuditEntry, Entry, EntryTemplate, InviteStatus, ManagedUser, ProcessedEntry, Settings, Totals,
   FormState, Toast, InvLineRow, SavedInvoice, UserRole,
 } from "@/types";
-import { calcHours, processEntries, weekStart } from "@/lib/calculations";
+import { calcHours, processEntries, weekStart, weekEnd } from "@/lib/calculations";
 import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, upsertEntry, deleteEntry, archiveEntries, unarchiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getWorkerSettings, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
@@ -54,6 +54,7 @@ function withStatuses(users: ManagedUser[], statuses: InviteStatusMap): ManagedU
 }
 import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
 import { getInvoices, saveInvoice, updateInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
+import { getBankClosures, saveBankClosure, type BankClosure } from "@/services/bankClosures";
 import { logActivity, getAuditLog } from "@/services/audit";
 
 export function useAppData() {
@@ -72,6 +73,7 @@ export function useAppData() {
   const [userId,          setUserId]          = useState<string | null>(null);
   const [loading,         setLoading]         = useState(true);
   const [invoiceHistory,  setInvoiceHistory]  = useState<SavedInvoice[]>([]);
+  const [bankClosures,    setBankClosures]    = useState<BankClosure[]>([]);
   const [viewingInvoice,  setViewingInvoice]  = useState<SavedInvoice | null>(null);
   const [userRole,        setUserRole]        = useState<UserRole>("user");
   const [managedUsers,    setManagedUsers]    = useState<ManagedUser[]>([]);
@@ -171,10 +173,11 @@ export function useAppData() {
             if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
           }
         } else {
-          const [fetchedEntries, settingsRow, invoices, companyRes] = await Promise.all([
+          const [fetchedEntries, settingsRow, invoices, closures, companyRes] = await Promise.all([
             getEntries(supabase, user.id),
             fetchSettings(),
             getInvoices(supabase, user.id),
+            getBankClosures(supabase, user.id),
             fetch("/api/company-info"),
           ]);
           if (companyRes.ok) setAdminCompanyInfo(await companyRes.json());
@@ -185,6 +188,7 @@ export function useAppData() {
             if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
           }
           setInvoiceHistory(invoices);
+          setBankClosures(closures);
         }
 
         setLoading(false);
@@ -400,10 +404,19 @@ export function useAppData() {
   const handleSaveWorkerRules = useCallback(async (
     rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[],
   ) => {
+    // Detect ABN <-> Hour Bank switches before overwriting, so they can be
+    // logged individually — a generic "rules saved" entry doesn't tell an
+    // admin looking back which worker changed mode, or when.
+    const modeChanges: { workerId: string; workerName: string; from: "abn" | "bank"; to: "abn" | "bank" }[] = [];
     const results = await Promise.all(
       rules.map(({ userId: wid, tfnLimit, overtimeThreshold, excessMode, workerType }) => {
-        const existing = workerSettings[wid] ?? DEFAULT_SETTINGS;
-        const updated  = { ...existing, tfnLimit, overtimeThreshold, excessMode, workerType };
+        const existing     = workerSettings[wid] ?? DEFAULT_SETTINGS;
+        const previousMode = existing.excessMode ?? "abn";
+        if (previousMode !== excessMode) {
+          const workerName = managedUsersRef.current.find(u => u.id === wid)?.name ?? "worker";
+          modeChanges.push({ workerId: wid, workerName, from: previousMode, to: excessMode });
+        }
+        const updated = { ...existing, tfnLimit, overtimeThreshold, excessMode, workerType };
         setWorkerSettings(prev => ({ ...prev, [wid]: updated }));
         return saveWorkerSettingsSvc(supabase, wid, updated);
       })
@@ -412,6 +425,11 @@ export function useAppData() {
     else {
       showToast("Worker rules saved");
       recordAudit("worker_rules_saved", null, null, { workerCount: rules.length });
+      for (const change of modeChanges) {
+        recordAudit("worker_mode_changed", "worker", change.workerId, {
+          workerName: change.workerName, from: change.from, to: change.to,
+        });
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workerSettings]); // supabase/showToast/setters/recordAudit are stable
@@ -526,20 +544,29 @@ export function useAppData() {
       { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
     ];
     const isBank = settings.excessMode === "bank";
+    // A worker keeps access to their history on the "other side" even after
+    // switching modes — e.g. an ex-bank worker now on ABN can still see their
+    // frozen bank balance, and an ex-ABN worker now on bank can still see
+    // their past invoices.
+    const hasBankHistory    = bankClosures.length > 0;
+    const hasInvoiceHistory = invoiceHistory.length > 0;
     return [
       { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
       { id: "log",       label: "Log Entry",    icon: "ti-clock-plus"       },
       { id: "entries",   label: "Entries",      icon: "ti-list"             },
       { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
       { id: "tfn",       label: "TFN Report",   icon: "ti-report"           },
-      ...(isBank ? [
-        { id: "bank",    label: "Hour Bank",    icon: "ti-clock-dollar"     },
-      ] : [
+      ...(!isBank ? [
         { id: "abn",     label: "ABN Invoice",  icon: "ti-receipt"          },
+      ] : []),
+      ...(isBank || hasBankHistory ? [
+        { id: "bank",    label: "Hour Bank",    icon: "ti-clock-dollar"     },
+      ] : []),
+      ...(!isBank || hasInvoiceHistory ? [
         { id: "history", label: "Invoices",     icon: "ti-history"          },
-      ]),
+      ] : []),
     ];
-  }, [userRole, settings.excessMode]);
+  }, [userRole, settings.excessMode, bankClosures.length, invoiceHistory.length]);
 
   const clients = useMemo(() =>
     [...new Set(entries.map(e => e.client).filter(Boolean))].sort() as string[],
@@ -674,9 +701,20 @@ export function useAppData() {
     if (userId) {
       const ok = await archiveEntries(supabase, toCloseIds);
       if (!ok) { showToast("Could not close week", "err"); return; }
+
+      // Freeze this week's banked hours permanently — if the worker's mode
+      // later changes, this week must still show as a bank week, not get
+      // silently reprocessed under the new mode.
+      if (isBank) {
+        const bankedHours = weekEntries.reduce((s, e) => s + e.bankHours, 0);
+        const closure = await saveBankClosure(supabase, {
+          userId, weekStart: ws, weekEnd: weekEnd(ws), hours: bankedHours,
+        });
+        if (closure) setBankClosures(prev => [closure, ...prev.filter(c => c.weekStart !== ws)]);
+      }
     }
     setEntries(prev => prev.map(e => toCloseIds.includes(e.id) ? { ...e, archived: true } : e));
-    showToast("Week closed — no invoice needed");
+    showToast(isBank ? "Week closed — hours banked" : "Week closed — no invoice needed");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeklyData, userId, settings.excessMode]); // supabase/showToast/setters stable
 
@@ -797,6 +835,7 @@ export function useAppData() {
     theme,
     loading,
     invoiceHistory,
+    bankClosures,
     viewingInvoice, setViewingInvoice,
     userRole,
     managedUsers,

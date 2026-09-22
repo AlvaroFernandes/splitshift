@@ -37,6 +37,11 @@ const ACTION_DEFS: Record<string, ActionDef> = {
     color: "var(--color-text-warning)",
     label: m => `Updated work rules for ${m.workerCount ?? 0} worker${Number(m.workerCount) !== 1 ? "s" : ""}`,
   },
+  worker_mode_changed: {
+    icon:  "ti-arrows-exchange",
+    color: "var(--color-text-bank)",
+    label: m => `Switched ${m.workerName ?? "worker"} from ${m.from === "bank" ? "Hour Bank" : "ABN"} to ${m.to === "bank" ? "Hour Bank" : "ABN"}`,
+  },
 };
 
 function ActionIcon({ action, color }: { action: string; color: string }) {

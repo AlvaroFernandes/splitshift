@@ -19,6 +19,13 @@ export function weekStart(dateStr: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Sunday closing a week that started on `weekStartStr` (Monday)
+export function weekEnd(weekStartStr: string): string {
+  const d = new Date(weekStartStr + "T12:00:00");
+  d.setDate(d.getDate() + 6);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * Processes entries into billable buckets.
  *

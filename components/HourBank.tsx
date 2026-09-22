@@ -1,5 +1,6 @@
 import React from "react";
 import type { ProcessedEntry, Settings } from "@/types";
+import type { BankClosure } from "@/services/bankClosures";
 import { fh, fd, todayStr } from "@/lib/formatters";
 import { weekStart } from "@/lib/calculations";
 import { Metric, Bdg } from "./ui";
@@ -11,54 +12,67 @@ function weekLabel(monStr: string): string {
   return `${mon.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
-interface BankWeek {
+interface StatementRow {
   weekStart: string;
-  entries: ProcessedEntry[];
-  worked: number;
-  paidHours: number;
-  banked: number;
+  hours: number;
   balance: number;
+  pending: boolean;
 }
 
-// allProcessed: every entry the worker has ever logged, so the balance is a
-// running all-time total rather than a per-period figure.
-export const HourBank = React.memo(function HourBank({ allProcessed, periodProcessed, settings, periodStart, periodEnd }: {
-  allProcessed: ProcessedEntry[];
-  periodProcessed: ProcessedEntry[];
+// bankClosures: permanent, frozen record of every week closed while on Hour
+// Bank mode (see closeWeek in useAppData.ts). These never change even if the
+// worker's mode is switched later, so past weeks always show their true
+// history. openProcessed: this worker's currently open (not yet closed)
+// entries, live-computed under their current settings — a preview of what
+// would be banked once the active week is closed.
+export const HourBank = React.memo(function HourBank({ bankClosures, openProcessed, settings, periodStart, periodEnd }: {
+  bankClosures: BankClosure[];
+  openProcessed: ProcessedEntry[];
   settings: Settings;
   periodStart: string;
   periodEnd: string;
 }) {
-  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
-
-  const { weeks, balance, thisWeek } = React.useMemo(() => {
-    const weekMap = new Map<string, ProcessedEntry[]>();
-    for (const e of allProcessed) {
-      const ws = weekStart(e.date);
-      if (!weekMap.has(ws)) weekMap.set(ws, []);
-      weekMap.get(ws)!.push(e);
-    }
-
-    let running = 0;
-    const weeks: BankWeek[] = [...weekMap.keys()].sort().map(ws => {
-      const entries = weekMap.get(ws)!;
-      const worked    = entries.reduce((a, e) => a + e.total,      0);
-      const paidHours = entries.reduce((a, e) => a + e.tfnPortion, 0);
-      const banked    = entries.reduce((a, e) => a + e.bankHours,  0);
-      running += banked;
-      return { weekStart: ws, entries, worked, paidHours, banked, balance: running };
-    });
-
-    const currentWeek = weeks.find(w => w.weekStart === weekStart(todayStr()));
-    return { weeks, balance: running, thisWeek: currentWeek?.banked ?? 0 };
-  }, [allProcessed]);
-
-  const periodBanked = React.useMemo(
-    () => periodProcessed.reduce((a, e) => a + e.bankHours, 0),
-    [periodProcessed],
+  const closedBalance = React.useMemo(
+    () => bankClosures.reduce((s, c) => s + c.hours, 0),
+    [bankClosures],
   );
 
-  const banking = weeks.filter(w => w.banked > 0);
+  const { pendingByWeek, pendingTotal } = React.useMemo(() => {
+    const byWeek = new Map<string, number>();
+    for (const e of openProcessed) {
+      const ws = weekStart(e.date);
+      byWeek.set(ws, (byWeek.get(ws) ?? 0) + e.bankHours);
+    }
+    const total = [...byWeek.values()].reduce((a, b) => a + b, 0);
+    return { pendingByWeek: byWeek, pendingTotal: total };
+  }, [openProcessed]);
+
+  const balance = closedBalance + pendingTotal;
+
+  const thisWeekStart = weekStart(todayStr());
+  const thisWeekPending = pendingByWeek.get(thisWeekStart) ?? 0;
+
+  const periodClosed = React.useMemo(
+    () => bankClosures
+      .filter(c => (!periodStart || c.weekStart >= periodStart) && (!periodEnd || c.weekStart <= periodEnd))
+      .reduce((s, c) => s + c.hours, 0),
+    [bankClosures, periodStart, periodEnd],
+  );
+  const periodBanked = periodClosed + pendingTotal;
+
+  const statement = React.useMemo(() => {
+    const sorted = [...bankClosures].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    let running = 0;
+    const rows: StatementRow[] = sorted.map(c => {
+      running += c.hours;
+      return { weekStart: c.weekStart, hours: c.hours, balance: running, pending: false };
+    });
+    for (const [ws, hours] of [...pendingByWeek.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      running += hours;
+      rows.push({ weekStart: ws, hours, balance: running, pending: true });
+    }
+    return rows;
+  }, [bankClosures, pendingByWeek]);
 
   return (
     <div>
@@ -89,11 +103,11 @@ export const HourBank = React.memo(function HourBank({ allProcessed, periodProce
       <div className="metric-grid mt-3">
         <Metric label="Bank balance"     value={fh(balance)}      sub="accrued, all time"                        bold />
         <Metric label="This period"      value={fh(periodBanked)} sub="banked in current period"                 color="info" />
-        <Metric label="This week"        value={fh(thisWeek)}     sub="banked since Monday"                      color="info" />
+        <Metric label="This week"        value={fh(thisWeekPending)} sub="pending — week not yet closed"         color="info" />
         <Metric label="Weekly threshold" value={fh(settings.tfnLimit)} sub="hours paid before banking starts"    />
       </div>
 
-      {banking.length === 0 ? (
+      {statement.length === 0 ? (
         <div className="empty-state mt-4">
           <i className="ti ti-clock-dollar" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
           <p>No hours banked yet</p>
@@ -110,61 +124,26 @@ export const HourBank = React.memo(function HourBank({ allProcessed, periodProce
             <thead>
               <tr>
                 <th>Week</th>
-                <th>Entries</th>
-                <th>Worked</th>
-                <th>Paid hrs</th>
+                <th>Status</th>
                 <th>Banked</th>
                 <th>Balance</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              {weeks.map(w => (
-                <React.Fragment key={w.weekStart}>
-                  <tr>
-                    <td style={{ whiteSpace: "nowrap", fontWeight: 500 }}>{weekLabel(w.weekStart)}</td>
-                    <td>{w.entries.length}</td>
-                    <td className="mono">{fh(w.worked)}</td>
-                    <td className="mono">{w.paidHours > 0 ? <Bdg type="tfn">{fh(w.paidHours)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td className="mono">{w.banked > 0 ? <Bdg type="bank">+{fh(w.banked)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td className="mono" style={{ fontWeight: 500 }}>{fh(w.balance)}</td>
-                    <td>
-                      <button
-                        className="icon-btn-sm no-print"
-                        onClick={() => setExpanded(prev => ({ ...prev, [w.weekStart]: !prev[w.weekStart] }))}
-                        aria-label={expanded[w.weekStart] ? "Collapse" : "Expand"}
-                      >
-                        <i className={`ti ${expanded[w.weekStart] ? "ti-chevron-up" : "ti-chevron-down"}`} aria-hidden="true" />
-                      </button>
-                    </td>
-                  </tr>
-
-                  {expanded[w.weekStart] && [...w.entries]
-                    .sort((a, b) => a.date !== b.date ? a.date.localeCompare(b.date) : a.startTime.localeCompare(b.startTime))
-                    .map(e => (
-                      <tr key={e.id} style={{ background: "var(--color-background-secondary)" }}>
-                        <td className="mono muted" style={{ fontSize: 11, paddingLeft: 24 }}>{fd(e.date)}</td>
-                        <td colSpan={2} style={{ fontSize: 12 }}>
-                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{e.jobDescription}</div>
-                          <div className="mono muted" style={{ fontSize: 11, marginTop: 2 }}>
-                            {e.startTime}–{e.endTime}
-                            {e.breakMins > 0 && <span> −{e.breakMins}m</span>}
-                          </div>
-                        </td>
-                        <td className="mono" style={{ fontSize: 12 }}>{e.tfnPortion > 0 ? fh(e.tfnPortion) : <span className="muted">—</span>}</td>
-                        <td>{e.bankHours > 0 ? <Bdg type="bank">+{fh(e.bankHours)}</Bdg> : <span className="muted">—</span>}</td>
-                        <td colSpan={2} />
-                      </tr>
-                    ))}
-                </React.Fragment>
+              {statement.map(row => (
+                <tr key={row.weekStart} style={row.pending ? { opacity: 0.7 } : undefined}>
+                  <td style={{ whiteSpace: "nowrap", fontWeight: 500 }}>{weekLabel(row.weekStart)}</td>
+                  <td>{row.pending ? <span className="muted" style={{ fontSize: 12 }}>Pending</span> : <Bdg type="bank">Closed</Bdg>}</td>
+                  <td className="mono">{row.hours > 0 ? <Bdg type="bank">+{fh(row.hours)}</Bdg> : <span className="muted">—</span>}</td>
+                  <td className="mono" style={{ fontWeight: 500 }}>{fh(row.balance)}</td>
+                </tr>
               ))}
             </tbody>
             <tfoot>
               <tr style={{ borderTop: "1px solid var(--color-border-secondary)" }}>
                 <td style={{ fontWeight: 500, fontSize: 12 }}>Balance</td>
-                <td colSpan={4} />
+                <td colSpan={2} />
                 <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-bank)" }}>{fh(balance)}</td>
-                <td />
               </tr>
             </tfoot>
           </table>

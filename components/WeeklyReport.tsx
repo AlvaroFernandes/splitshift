@@ -1,17 +1,8 @@
 import React from "react";
 import type { ManagedUser, ProcessedEntry, Settings } from "@/types";
 import { fh, fc, fd, fdInv, downloadPdf } from "@/lib/formatters";
-import { weekStart } from "@/lib/calculations";
+import { weekStart, weekEnd } from "@/lib/calculations";
 import { Bdg } from "./ui";
-
-function weekEnd(monStr: string): string {
-  const d = new Date(monStr + "T12:00:00");
-  d.setDate(d.getDate() + 6);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 function weekLabel(monStr: string): string {
   const mon = new Date(monStr + "T12:00:00");

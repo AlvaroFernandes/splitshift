@@ -25,6 +25,7 @@ export default function WorkHoursTracker() {
     theme,
     loading,
     invoiceHistory,
+    bankClosures,
     viewingInvoice, setViewingInvoice,
     userRole,
     managedUsers,
@@ -155,7 +156,7 @@ export default function WorkHoursTracker() {
             periodStart={periodStart} periodEnd={periodEnd} onCloseWeek={closeWeek} />
         )}
         {tab === "bank" && userRole !== "admin" && (
-          <HourBank allProcessed={chartProcessed} periodProcessed={processed} settings={settings}
+          <HourBank bankClosures={bankClosures} openProcessed={processed} settings={settings}
             periodStart={periodStart} periodEnd={periodEnd} />
         )}
         {tab === "abn" && userRole !== "admin" && (
