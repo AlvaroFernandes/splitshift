@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { ProcessedEntry, Totals, Settings } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
 import { weekStart } from "@/lib/calculations";
+import { estimateNetForPeriod } from "@/lib/tax";
 
 function weekLabel(monStr: string): string {
   const mon = new Date(monStr + "T12:00:00");
@@ -30,6 +31,10 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
     weekMap.get(ws)!.push(e);
   }
   const weeks = [...weekMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+  // Summed per-week (not annualised off the period total) since each week
+  // is its own pay period with its own effective tax rate.
+  const totalNet = weeks.reduce((sum, [, entries]) =>
+    sum + estimateNetForPeriod(entries.reduce((a, e) => a + e.tfnEarnings, 0), 52).net, 0);
 
   // A week can be closed without an invoice only if none of its entries
   // exceeded the admin's hour limit. Hour-bank workers have no invoice flow —
@@ -82,6 +87,7 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
             const wRegHrs = entries.reduce((a, e) => a + e.rTFN,  0);
             const wOtHrs  = entries.reduce((a, e) => a + e.otTFN, 0);
             const wEarnings = entries.reduce((a, e) => a + e.tfnEarnings, 0);
+            const wNet      = estimateNetForPeriod(wEarnings, 52).net;
 
             const canClose = onCloseWeek && !weekExceeded.get(ws);
 
@@ -92,8 +98,12 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                     Week: {weekLabel(ws)}
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>
-                      {fc(wEarnings)}
+                    <span className="mono" style={{ fontSize: 12 }}>
+                      <span style={{ color: "var(--color-text-success)" }}>{fc(wEarnings)}</span>
+                      <span className="muted" style={{ marginLeft: 6 }}>gross</span>
+                      <span className="muted" style={{ margin: "0 4px" }}>·</span>
+                      <span>{fc(wNet)}</span>
+                      <span className="muted" style={{ marginLeft: 4 }}>net (est.)</span>
                     </span>
                     {canClose && (
                       <button
@@ -174,8 +184,12 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
               <div className="mono" style={{ fontSize: 18, fontWeight: 500, color: "var(--color-text-warning)" }}>{fh(otHrs)}</div>
             </div>
             <div className="card" style={{ padding: "12px 16px" }}>
-              <div className="muted" style={{ fontSize: 12 }}>TFN total</div>
+              <div className="muted" style={{ fontSize: 12 }}>TFN gross</div>
               <div className="mono" style={{ fontSize: 20, fontWeight: 500, color: "var(--color-text-success)" }}>{fc(totals.tfnEarnings)}</div>
+            </div>
+            <div className="card" style={{ padding: "12px 16px" }}>
+              <div className="muted" style={{ fontSize: 12 }}>Net pay (est.)</div>
+              <div className="mono" style={{ fontSize: 20, fontWeight: 500 }}>{fc(totalNet)}</div>
             </div>
           </div>
         </>

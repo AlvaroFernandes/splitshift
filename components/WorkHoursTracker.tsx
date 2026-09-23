@@ -26,6 +26,8 @@ export default function WorkHoursTracker() {
     loading,
     invoiceHistory,
     bankClosures,
+    invoiceHistoryByWorker,
+    bankClosuresByWorker,
     viewingInvoice, setViewingInvoice,
     userRole,
     managedUsers,
@@ -151,6 +153,9 @@ export default function WorkHoursTracker() {
             isReadOnly={userRole === "viewer"} users={managedUsers}
             invoiceHistory={userRole === "user" ? invoiceHistory : undefined}
             bankClosures={userRole === "user" ? bankClosures : undefined}
+            invoiceHistoryByWorker={userRole === "admin" ? invoiceHistoryByWorker : undefined}
+            bankClosuresByWorker={userRole === "admin" ? bankClosuresByWorker : undefined}
+            workerSettings={userRole === "admin" ? workerSettings : undefined}
             onEdit={handleEdit} onDelete={handleDelete} />
         )}
         {tab === "tfn" && userRole !== "admin" && (

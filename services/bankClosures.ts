@@ -35,6 +35,25 @@ export async function getBankClosures(supabase: SupabaseClient, userId: string):
   return ((data ?? []) as Record<string, unknown>[]).map(fromRow);
 }
 
+// Admin/viewer combined team view: each managed worker's own bank-closure
+// history, so their weeks can be labeled with the mode/settings frozen at
+// closing time instead of the worker's current settings.
+export async function getBankClosuresForWorkers(
+  supabase: SupabaseClient,
+  userIds: string[],
+): Promise<Record<string, BankClosure[]>> {
+  if (userIds.length === 0) return {};
+  const { data } = await supabase
+    .from("bank_closures").select("*").in("user_id", userIds)
+    .order("week_start", { ascending: false });
+  const result: Record<string, BankClosure[]> = {};
+  for (const row of (data ?? []) as Record<string, unknown>[]) {
+    const closure = fromRow(row);
+    (result[closure.userId] ??= []).push(closure);
+  }
+  return result;
+}
+
 // One row per worker per week — safe to call even if the week was already
 // closed (e.g. a retry), since (user_id, week_start) is unique.
 export async function saveBankClosure(

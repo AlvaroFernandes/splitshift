@@ -54,8 +54,8 @@ function withStatuses(users: ManagedUser[], statuses: InviteStatusMap): ManagedU
   return users.map(u => statuses[u.id] ? { ...u, status: statuses[u.id].status, invitedAt: statuses[u.id].invitedAt } : u);
 }
 import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
-import { getInvoices, saveInvoice, updateInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
-import { getBankClosures, saveBankClosure, type BankClosure } from "@/services/bankClosures";
+import { getInvoices, getInvoicesForWorkers, saveInvoice, updateInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
+import { getBankClosures, getBankClosuresForWorkers, saveBankClosure, type BankClosure } from "@/services/bankClosures";
 import { logActivity, getAuditLog } from "@/services/audit";
 
 export function useAppData() {
@@ -83,6 +83,8 @@ export function useAppData() {
   const [adminEditEntry,  setAdminEditEntry]  = useState<Entry | null>(null);
   const [adminUserFilter, setAdminUserFilter] = useState<string>("all");
   const [workerSettings,     setWorkerSettings]     = useState<Record<string, Settings>>({});
+  const [invoiceHistoryByWorker, setInvoiceHistoryByWorker] = useState<Record<string, SavedInvoice[]>>({});
+  const [bankClosuresByWorker,   setBankClosuresByWorker]   = useState<Record<string, BankClosure[]>>({});
   const [reminderDismissed,  setReminderDismissed]  = useState(false);
   const [auditLog,           setAuditLog]           = useState<AuditEntry[]>([]);
   const [adminCompanyInfo,   setAdminCompanyInfo]   = useState<{ companyName: string; companyAbn: string; companyAddress: string; companyEmail: string } | null>(null);
@@ -144,9 +146,15 @@ export function useAppData() {
 
           const fetchedEntries = entriesRes.ok ? await entriesRes.json() : [];
           const workerIds = team.users.map(u => u.id);
-          const fetchedWorkerSettings = await getWorkerSettings(supabase, workerIds);
+          const [fetchedWorkerSettings, fetchedInvoicesByWorker, fetchedClosuresByWorker] = await Promise.all([
+            getWorkerSettings(supabase, workerIds),
+            getInvoicesForWorkers(supabase, workerIds),
+            getBankClosuresForWorkers(supabase, workerIds),
+          ]);
           setEntries(fetchedEntries);
           setWorkerSettings(fetchedWorkerSettings);
+          setInvoiceHistoryByWorker(fetchedInvoicesByWorker);
+          setBankClosuresByWorker(fetchedClosuresByWorker);
           if (settingsRow) {
             setSettings(settingsRow.settings);
             if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
@@ -467,8 +475,14 @@ export function useAppData() {
         const ot  = ws.overtimeThreshold || 12;
         const lim = ws.tfnLimit || 30;
         const em = ws.excessMode ?? "abn";
-        procParts.push(   ...processEntries(periodEntries.filter(e => e.ownerId === uid),    lim, tfnRateParsed, ot, em));
-        allProcParts.push(...processEntries(allPeriodEntries.filter(e => e.ownerId === uid), lim, tfnRateParsed, ot, em));
+        procParts.push(...processEntries(periodEntries.filter(e => e.ownerId === uid), lim, tfnRateParsed, ot, em));
+        // Archived entries may belong to a week closed under different settings
+        // (a different rate/limit/mode) than the worker's current ones — use
+        // each week's own frozen regime, just like the worker's own view does.
+        allProcParts.push(...processEntriesWithHistory(
+          allPeriodEntries.filter(e => e.ownerId === uid), ws,
+          invoiceHistoryByWorker[uid] ?? [], bankClosuresByWorker[uid] ?? [],
+        ));
       }
       processed   = procParts;
       allProcessed = allProcParts;
@@ -490,8 +504,10 @@ export function useAppData() {
       const chartParts: ReturnType<typeof processEntries> = [];
       for (const uid of allWorkerIds) {
         const ws = workerSettings[uid] ?? DEFAULT_SETTINGS;
-        const tfnRateParsed = parseFloat(ws.tfnRate || "") || undefined;
-        chartParts.push(...processEntries(entries.filter(e => e.ownerId === uid), ws.tfnLimit || 30, tfnRateParsed, ws.overtimeThreshold || 12, ws.excessMode ?? "abn"));
+        chartParts.push(...processEntriesWithHistory(
+          entries.filter(e => e.ownerId === uid), ws,
+          invoiceHistoryByWorker[uid] ?? [], bankClosuresByWorker[uid] ?? [],
+        ));
       }
       chartProcessed = chartParts;
     } else {
@@ -529,7 +545,7 @@ export function useAppData() {
   // settings is used wholesale (via processEntriesWithHistory) as well as by field, and
   // invoiceHistory/bankClosures feed the historical-regime lookups for archived entries.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, periodStart, periodEnd, settings, userRole, workerSettings, invoiceHistory, bankClosures]);
+  }, [entries, periodStart, periodEnd, settings, userRole, workerSettings, invoiceHistory, bankClosures, invoiceHistoryByWorker, bankClosuresByWorker]);
 
   const editEntry = useMemo(
     () => (editId ? (entries.find(e => e.id === editId) ?? null) : null),
@@ -850,6 +866,8 @@ export function useAppData() {
     loading,
     invoiceHistory,
     bankClosures,
+    invoiceHistoryByWorker,
+    bankClosuresByWorker,
     viewingInvoice, setViewingInvoice,
     userRole,
     managedUsers,

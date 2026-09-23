@@ -4,6 +4,7 @@ import type { BankClosure } from "@/services/bankClosures";
 import { fh, fc, fd, fdInv, downloadPdf } from "@/lib/formatters";
 import { weekStart, weekEnd } from "@/lib/calculations";
 import { weekModeMap } from "@/lib/historicalProcessing";
+import { estimateNetForPeriod } from "@/lib/tax";
 import { Bdg } from "./ui";
 
 function weekLabel(monStr: string): string {
@@ -13,11 +14,11 @@ function weekLabel(monStr: string): string {
   return `${mon.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
-type WeekMode = "abn" | "bank";
+type WeekMode = "abn" | "bank" | "mixed";
 
 interface WeekSummary {
   weekStart: string;
-  mode: WeekMode; // which rules actually governed this week — frozen at close time
+  mode: WeekMode; // which rules actually governed this week — frozen at close time; "mixed" only occurs in the admin combined view when workers under the same calendar week were in different modes
   entries: ProcessedEntry[];
   hours: number;
   breakMinsTotal: number;
@@ -28,6 +29,7 @@ interface WeekSummary {
   bankHours: number;
   accumulated: number; // running bank balance, across this report's bank-mode weeks only
   tfnEarnings: number;
+  tfnNetEstimate: number; // estimated take-home TFN pay after income tax + Medicare levy
   abnEarnings: number;
   total: number;
 }
@@ -121,13 +123,20 @@ interface Props {
   onDelete?: (id: string) => void | Promise<void>;
   // A worker's own invoice/bank history — used to label each week with the
   // mode that actually governed it (frozen at close time), rather than
-  // whatever the worker's mode happens to be today. Not available for the
-  // admin's combined team view, which falls back to "abn" per week.
+  // whatever the worker's mode happens to be today.
   invoiceHistory?: SavedInvoice[];
   bankClosures?: BankClosure[];
+  // Admin's combined team view: the same history, per managed worker, keyed
+  // by worker id — each worker's weeks are labeled from their own frozen
+  // records rather than a single shared history.
+  invoiceHistoryByWorker?: Record<string, SavedInvoice[]>;
+  bankClosuresByWorker?: Record<string, BankClosure[]>;
+  // Each managed worker's current settings — used only as the fallback mode
+  // for a worker's weeks with no invoice/closure record yet (still open).
+  workerSettings?: Record<string, Settings>;
 }
 
-export const WeeklyReport = React.memo(function WeeklyReport({ processed, settings, isAdmin, isReadOnly, users, onEdit, onDelete, invoiceHistory, bankClosures }: Props) {
+export const WeeklyReport = React.memo(function WeeklyReport({ processed, settings, isAdmin, isReadOnly, users, onEdit, onDelete, invoiceHistory, bankClosures, invoiceHistoryByWorker, bankClosuresByWorker, workerSettings }: Props) {
   const [expanded,      setExpanded]      = React.useState<Record<string, boolean>>({});
   const [selectedWeek,  setSelectedWeek]  = React.useState<WeekSummary | null>(null);
   const [downloading,   setDownloading]   = React.useState(false);
@@ -140,11 +149,35 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
     () => weekModeMap(invoiceHistory ?? [], bankClosures ?? []),
     [invoiceHistory, bankClosures],
   );
+  // Admin's combined team view: one mode map per worker, since two workers
+  // can be in different modes for the same calendar week.
+  const weekModesByOwner = React.useMemo(() => {
+    const map = new Map<string, Map<string, WeekMode>>();
+    const owners = new Set([
+      ...Object.keys(invoiceHistoryByWorker ?? {}),
+      ...Object.keys(bankClosuresByWorker ?? {}),
+    ]);
+    for (const uid of owners) {
+      map.set(uid, weekModeMap(invoiceHistoryByWorker?.[uid] ?? [], bankClosuresByWorker?.[uid] ?? []));
+    }
+    return map;
+  }, [invoiceHistoryByWorker, bankClosuresByWorker]);
   // Fallback for weeks with no invoice/closure record yet (still open, or
   // closed long before this tracking existed) — the worker's current mode.
-  // Admin's combined team view has no per-week history available, so it
-  // always falls back to ABN-style columns, matching prior behaviour.
-  const fallbackMode: WeekMode = isAdmin ? "abn" : (settings.excessMode === "bank" ? "bank" : "abn");
+  const fallbackMode: WeekMode = settings.excessMode === "bank" ? "bank" : "abn";
+
+  // Which mode actually governed a given entry's week — per-worker in the
+  // admin combined view (each worker has their own frozen history), or the
+  // single history passed in for a worker's own report.
+  const modeForEntry = React.useCallback((e: ProcessedEntry, ws: string): WeekMode => {
+    if (isAdmin) {
+      const owner = e.ownerId ?? "";
+      const recorded = weekModesByOwner.get(owner)?.get(ws);
+      if (recorded) return recorded;
+      return workerSettings?.[owner]?.excessMode === "bank" ? "bank" : "abn";
+    }
+    return weekModes.get(ws) ?? fallbackMode;
+  }, [isAdmin, weekModesByOwner, workerSettings, weekModes, fallbackMode]);
 
   const handleDeleteClick = async (id: string) => {
     if (!onDelete) return;
@@ -158,7 +191,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       : processed,
   [processed, isAdmin, workerFilter]);
 
-  const { weeks, grandTotal } = React.useMemo(() => {
+  const { weeks, grandTotal, entryModes } = React.useMemo(() => {
     const weekMap: Record<string, ProcessedEntry[]> = {};
     visible.forEach(e => {
       const ws = weekStart(e.date);
@@ -166,10 +199,20 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       weekMap[ws].push(e);
     });
 
+    // Per-entry mode, keyed by entry id — in the admin combined view this can
+    // differ entry-to-entry within the same calendar week (different workers).
+    const entryModes = new Map<string, WeekMode>();
+
     const weeks: WeekSummary[] = Object.keys(weekMap).sort().map(ws => {
       const entries = weekMap[ws];
-      const mode = weekModes.get(ws) ?? fallbackMode;
-      return entries.reduce<WeekSummary>((a, e) => ({
+      const modesPresent = new Set<WeekMode>();
+      entries.forEach(e => {
+        const m = modeForEntry(e, ws);
+        entryModes.set(e.id, m);
+        modesPresent.add(m);
+      });
+      const mode: WeekMode = modesPresent.size > 1 ? "mixed" : [...modesPresent][0] ?? fallbackMode;
+      const week = entries.reduce<WeekSummary>((a, e) => ({
         weekStart:      ws,
         mode,
         entries,
@@ -182,15 +225,22 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
         bankHours:      a.bankHours      + e.bankHours,
         accumulated:    0,
         tfnEarnings:    a.tfnEarnings    + e.tfnEarnings,
+        tfnNetEstimate: 0,
         abnEarnings:    a.abnEarnings    + e.abnEarnings,
         total:          a.total          + e.totalEarnings,
-      }), { weekStart: ws, mode, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, abnEarnings:0, total:0 });
+      }), { weekStart: ws, mode, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0 });
+      // Estimated per pay-period, from that week's own TFN gross — not
+      // accumulated per-entry, since the effective tax rate depends on the
+      // week's total, not each shift in isolation.
+      week.tfnNetEstimate = estimateNetForPeriod(week.tfnEarnings, 52).net;
+      return week;
     });
 
-    // Running bank balance across this report's bank-mode weeks only —
-    // interleaved ABN weeks (before a switch, or after switching back) just
-    // carry the balance forward without changing it.
-    weeks.forEach((w, i) => { w.accumulated = (weeks[i - 1]?.accumulated ?? 0) + (w.mode === "bank" ? w.bankHours : 0); });
+    // Running bank balance across this report's weeks — each entry's
+    // bankHours is already 0 unless it was actually processed under Hour
+    // Bank mode, so this stays correct even for a "mixed" week (multiple
+    // workers, only some of them in Bank mode, in the same calendar week).
+    weeks.forEach((w, i) => { w.accumulated = (weeks[i - 1]?.accumulated ?? 0) + w.bankHours; });
 
     const grandTotal = weeks.reduce<Omit<WeekSummary, "weekStart"|"entries"|"mode">>((a, w) => ({
       hours:          a.hours          + w.hours,
@@ -202,12 +252,13 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       bankHours:      a.bankHours      + w.bankHours,
       accumulated:    weeks.length ? weeks[weeks.length - 1].accumulated : 0,
       tfnEarnings:    a.tfnEarnings    + w.tfnEarnings,
+      tfnNetEstimate: a.tfnNetEstimate + w.tfnNetEstimate,
       abnEarnings:    a.abnEarnings    + w.abnEarnings,
       total:          a.total          + w.total,
-    }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, abnEarnings:0, total:0 });
+    }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0 });
 
-    return { weeks, grandTotal };
-  }, [visible, weekModes, fallbackMode]);
+    return { weeks, grandTotal, entryModes };
+  }, [visible, modeForEntry, fallbackMode]);
 
   const userMap = React.useMemo(() =>
     new Map((users ?? []).map(u => [u.id, u.name])),
@@ -285,6 +336,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               <th>TFN hrs</th>
               <th>Excess hrs</th>
               <th>TFN earnings</th>
+              <th>TFN net (est.)</th>
               <th>Excess earnings</th>
               <th>Bank balance</th>
               <th>Total</th>
@@ -296,7 +348,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               <React.Fragment key={w.weekStart}>
                 <tr>
                   <td style={{ whiteSpace: "nowrap", fontWeight: 500 }}>{weekLabel(w.weekStart)}</td>
-                  <td><Bdg type={w.mode}>{w.mode === "bank" ? "Bank" : "ABN"}</Bdg></td>
+                  <td><Bdg type={w.mode}>{w.mode === "bank" ? "Bank" : w.mode === "mixed" ? "Mixed" : "ABN"}</Bdg></td>
                   <td>{w.entries.length}</td>
                   <td className="mono muted">{w.breakMinsTotal > 0 ? `${w.breakMinsTotal}m` : "—"}</td>
                   <td className="mono">
@@ -312,8 +364,9 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                   <td className="mono">{w.tfnHours > 0 ? <Bdg type="tfn">{fh(w.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
                   <td className="mono">{w.abnHours > 0 ? <Bdg type={w.mode}>{fh(w.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
                   <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>
-                  <td className="mono" style={{ color: "var(--color-text-info)" }}>{w.mode === "abn" ? fc(w.abnEarnings) : <span className="muted">—</span>}</td>
-                  <td className="mono" style={{ color: "var(--color-text-bank)" }}>{w.mode === "bank" ? fh(w.accumulated) : <span className="muted">—</span>}</td>
+                  <td className="mono muted">{w.tfnEarnings > 0 ? fc(w.tfnNetEstimate) : <span className="muted">—</span>}</td>
+                  <td className="mono" style={{ color: "var(--color-text-info)" }}>{w.abnEarnings > 0 ? fc(w.abnEarnings) : <span className="muted">—</span>}</td>
+                  <td className="mono" style={{ color: "var(--color-text-bank)" }}>{(w.bankHours > 0 || w.accumulated > 0) ? fh(w.accumulated) : <span className="muted">—</span>}</td>
                   <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>
                   <td>
                     <span style={{ display: "flex", gap: 4 }}>
@@ -337,7 +390,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                   <tr key={e.id} style={{ background: "var(--color-background-secondary)", opacity: e.archived ? 0.65 : 1 }}>
                     <td className="mono muted" style={{ fontSize: 11, paddingLeft: 24 }}>
                       {fd(e.date)}
-                      {e.archived && <span style={{ marginLeft: 6, fontSize: 10, background: "var(--color-background-tertiary)", color: "var(--color-text-tertiary)", padding: "1px 5px", borderRadius: 3 }}>{w.mode === "bank" ? "banked" : "invoiced"}</span>}
+                      {e.archived && <span style={{ marginLeft: 6, fontSize: 10, background: "var(--color-background-tertiary)", color: "var(--color-text-tertiary)", padding: "1px 5px", borderRadius: 3 }}>{(entryModes.get(e.id) ?? w.mode) === "bank" ? "banked" : "invoiced"}</span>}
                     </td>
                     <td />
                     <td colSpan={isAdmin ? 1 : 2} style={{ fontSize: 12, maxWidth: 200 }}>
@@ -367,9 +420,10 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                     </td>
                     <td>{e.overtime > 0 ? <Bdg type="ot">{fh(e.overtime)}</Bdg> : <span className="muted">—</span>}</td>
                     <td>{e.tfnPortion > 0 ? <Bdg type="tfn">{fh(e.tfnPortion)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td>{e.abnPortion > 0 ? <Bdg type={w.mode}>{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>
+                    <td>{e.abnPortion > 0 ? <Bdg type={entryModes.get(e.id) ?? w.mode}>{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>
                     <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>
-                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{w.mode === "abn" ? fc(e.abnEarnings) : <span className="muted">—</span>}</td>
+                    <td />
+                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{e.abnEarnings > 0 ? fc(e.abnEarnings) : <span className="muted">—</span>}</td>
                     <td />
                     <td className="mono" style={{ fontSize: 12 }}>{fc(e.totalEarnings)}</td>
                     <td>
@@ -417,6 +471,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               <td className="mono">{grandTotal.tfnHours > 0 ? <Bdg type="tfn">{fh(grandTotal.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
               <td className="mono">{grandTotal.abnHours > 0 ? <Bdg type="abn">{fh(grandTotal.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
               <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>
+              <td className="mono muted" style={{ fontWeight: 500 }}>{fc(grandTotal.tfnNetEstimate)}</td>
               <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>
               <td className="mono" style={{ fontWeight: 600, color: "var(--color-text-bank)" }}>{grandTotal.bankHours > 0 ? fh(grandTotal.accumulated) : <span className="muted">—</span>}</td>
               <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>

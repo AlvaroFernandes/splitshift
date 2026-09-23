@@ -21,6 +21,25 @@ export async function getInvoices(supabase: SupabaseClient, userId: string): Pro
   return ((data ?? []) as Record<string, unknown>[]).map(fromInvoiceRow);
 }
 
+// Admin/viewer combined team view: each managed worker's own invoice history,
+// so their weeks can be labeled with the mode/settings frozen at invoicing
+// time instead of the worker's current settings.
+export async function getInvoicesForWorkers(
+  supabase: SupabaseClient,
+  userIds: string[],
+): Promise<Record<string, SavedInvoice[]>> {
+  if (userIds.length === 0) return {};
+  const { data } = await supabase
+    .from("invoices").select("*").in("user_id", userIds)
+    .order("invoice_num", { ascending: false });
+  const result: Record<string, SavedInvoice[]> = {};
+  for (const row of (data ?? []) as Record<string, unknown>[]) {
+    const uid = row.user_id as string;
+    (result[uid] ??= []).push(fromInvoiceRow(row));
+  }
+  return result;
+}
+
 export interface SaveInvoiceParams {
   id: string;
   userId: string;
