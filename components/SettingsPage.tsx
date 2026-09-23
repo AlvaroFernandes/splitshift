@@ -120,8 +120,13 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
   const updateRuleType = (userId: string, val: "office" | "site") =>
     setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, workerType: val } : r));
 
+  // Work Rules' table needs more room than the narrow forms on the other
+  // tabs (Personal/Company/Payment) — those stay at a comfortable reading
+  // width, while this one gets the space its columns actually need.
+  const wrapperMaxWidth = activeTab === "rules" ? 960 : 600;
+
   return (
-    <div style={{ maxWidth: 600 }}>
+    <div style={{ maxWidth: wrapperMaxWidth, margin: "0 auto" }}>
       <h2 className="sr-only">Settings</h2>
 
       <div className="tabbar no-print" style={{ marginBottom: 16, borderRadius: "var(--border-radius-lg)", border: "0.5px solid var(--color-border-tertiary)" }}>
@@ -320,12 +325,19 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
             {workerRules.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>No managed workers found.</p>
             ) : (
-              <table className="data-table" style={{ marginBottom: 4 }}>
+              <table className="data-table" style={{ marginBottom: 4, tableLayout: "fixed", width: "100%" }}>
+                <colgroup>
+                  <col style={{ width: "26%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "20%" }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Worker</th>
                     <th>TFN hour limit</th>
-                    <th>Overtime after (hrs/day)</th>
+                    <th style={{ whiteSpace: "normal" }}>Overtime after (hrs/day)</th>
                     <th>Excess hours</th>
                     <th>Worker type</th>
                   </tr>
@@ -360,6 +372,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                           onChange={e => updateRuleMode(r.userId, e.target.value as "abn" | "bank")}
                           aria-label={`Excess hours mode for ${r.name}`}
                           style={{
+                            width: "100%", maxWidth: 160, boxSizing: "border-box",
                             padding: "4px 8px", fontSize: 12,
                             border: "0.5px solid var(--color-border-secondary)",
                             borderRadius: "var(--border-radius-md)",
@@ -378,6 +391,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                             onChange={e => updateRuleType(r.userId, e.target.value as "office" | "site")}
                             aria-label={`Worker type for ${r.name}`}
                             style={{
+                              width: "100%", maxWidth: 180, boxSizing: "border-box",
                               padding: "4px 8px", fontSize: 12,
                               border: "0.5px solid var(--color-border-secondary)",
                               borderRadius: "var(--border-radius-md)",
