@@ -149,6 +149,8 @@ export default function WorkHoursTracker() {
         {tab === "weekly" && (
           <WeeklyReport processed={weeklyData} settings={settings} isAdmin={userRole === "admin"}
             isReadOnly={userRole === "viewer"} users={managedUsers}
+            invoiceHistory={userRole === "user" ? invoiceHistory : undefined}
+            bankClosures={userRole === "user" ? bankClosures : undefined}
             onEdit={handleEdit} onDelete={handleDelete} />
         )}
         {tab === "tfn" && userRole !== "admin" && (

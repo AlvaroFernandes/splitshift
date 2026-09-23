@@ -8,6 +8,7 @@ import type {
   FormState, Toast, InvLineRow, SavedInvoice, UserRole,
 } from "@/types";
 import { calcHours, processEntries, weekStart, weekEnd } from "@/lib/calculations";
+import { processEntriesWithHistory } from "@/lib/historicalProcessing";
 import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, upsertEntry, deleteEntry, archiveEntries, unarchiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getWorkerSettings, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
@@ -91,12 +92,10 @@ export function useAppData() {
   const managedUsersRef   = useRef<ManagedUser[]>([]);
   const userIdRef         = useRef<string | null>(null);
   const toastTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const settingsRef       = useRef<Settings>(DEFAULT_SETTINGS);
   const invoiceHistoryRef = useRef<SavedInvoice[]>([]);
   useEffect(() => { entriesRef.current        = entries;        }, [entries]);
   useEffect(() => { managedUsersRef.current   = managedUsers;   }, [managedUsers]);
   useEffect(() => { userIdRef.current         = userId;         }, [userId]);
-  useEffect(() => { settingsRef.current       = settings;       }, [settings]);
   useEffect(() => { invoiceHistoryRef.current = invoiceHistory; }, [invoiceHistory]);
 
   useEffect(() => {
@@ -270,12 +269,15 @@ export function useAppData() {
     );
     if (!inv) return;
 
-    const s = settingsRef.current;
+    // Use the invoice's own frozen settings, not the worker's current ones —
+    // otherwise correcting an entry after a later rate/mode change would
+    // silently rewrite this invoice's historical totals under new rules.
+    const s = inv.data.settings;
     const weekEntries = allEntries.filter(e =>
       e.archived && e.date >= inv.data.periodStart && e.date <= inv.data.periodEnd,
     );
     const tfnRateParsed = parseFloat(s.tfnRate || "") || undefined;
-    const processedWeek = processEntries(weekEntries, s.tfnLimit, tfnRateParsed, s.overtimeThreshold || 12, s.excessMode ?? "abn");
+    const processedWeek = processEntries(weekEntries, s.tfnLimit || 30, tfnRateParsed, s.overtimeThreshold || 12, "abn");
 
     const entryRows = buildEntryRows(processedWeek);
     const manualRows = inv.data.rows.filter(r => !r.entryId);
@@ -473,8 +475,12 @@ export function useAppData() {
     } else {
       const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
       const em = settings.excessMode ?? "abn";
-      processed    = processEntries(periodEntries,    settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, em);
-      allProcessed = processEntries(allPeriodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, em);
+      processed = processEntries(periodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, em);
+      // Archived entries may belong to a week closed under different settings
+      // (a different rate/limit/mode) than the worker's current ones — use
+      // each week's own frozen regime instead of blindly reprocessing under
+      // today's settings, which would rewrite history after any change.
+      allProcessed = processEntriesWithHistory(allPeriodEntries, settings, invoiceHistory, bankClosures);
     }
 
     // Earnings chart: all entries across all time (no period filter, including archived)
@@ -489,8 +495,7 @@ export function useAppData() {
       }
       chartProcessed = chartParts;
     } else {
-      const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
-      chartProcessed = processEntries(entries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, settings.excessMode ?? "abn");
+      chartProcessed = processEntriesWithHistory(entries, settings, invoiceHistory, bankClosures);
     }
 
     // Weekly report: all entries visible, but active entries use current-period TFN/ABN budget
@@ -521,7 +526,10 @@ export function useAppData() {
       tfnPct = Math.min(100, (weekWeightedTfn / (settings.tfnLimit || 30)) * 100);
     }
     return { allPeriodEntries, processed, weeklyData, totals, tfnPct, chartProcessed };
-  }, [entries, periodStart, periodEnd, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, settings.excessMode, userRole, workerSettings]);
+  // settings is used wholesale (via processEntriesWithHistory) as well as by field, and
+  // invoiceHistory/bankClosures feed the historical-regime lookups for archived entries.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, periodStart, periodEnd, settings, userRole, workerSettings, invoiceHistory, bankClosures]);
 
   const editEntry = useMemo(
     () => (editId ? (entries.find(e => e.id === editId) ?? null) : null),
@@ -713,6 +721,8 @@ export function useAppData() {
         const bankedHours = weekEntries.reduce((s, e) => s + e.bankHours, 0);
         const closure = await saveBankClosure(supabase, {
           userId, weekStart: ws, weekEnd: weekEnd(ws), hours: bankedHours,
+          tfnLimit: settings.tfnLimit, tfnRate: parseFloat(settings.tfnRate || "") || undefined,
+          overtimeThreshold: settings.overtimeThreshold || 12,
         });
         if (closure) setBankClosures(prev => [closure, ...prev.filter(c => c.weekStart !== ws)]);
       }
@@ -720,7 +730,7 @@ export function useAppData() {
     setEntries(prev => prev.map(e => toCloseIds.includes(e.id) ? { ...e, archived: true } : e));
     showToast(isBank ? "Week closed — hours banked" : "Week closed — no invoice needed");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyData, userId, settings.excessMode]); // supabase/showToast/setters stable
+  }, [weeklyData, userId, settings.excessMode, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold]); // supabase/showToast/setters stable
 
   const handleCancelEdit = useCallback(() => {
     setEditId(null);
