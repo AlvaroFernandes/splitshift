@@ -61,6 +61,14 @@ export function buildPdfFilename(
   return name.endsWith(".pdf") ? name : name + ".pdf";
 }
 
+// Desktop width to render the invoice/timesheet documents at for PDF export,
+// regardless of the caller's actual viewport. Comfortably above both the
+// app's 600px mobile breakpoint and .invoice-doc's own 820px max-width, so
+// html2canvas's cloned document always evaluates media queries as "desktop"
+// — without this, a phone-generated PDF would capture the stacked mobile
+// layout instead of matching what a desktop user downloads.
+const PDF_RENDER_WIDTH = 1000;
+
 export async function downloadPdf(elementId: string, filename: string): Promise<void> {
   const element = document.getElementById(elementId);
   if (!element) return;
@@ -68,6 +76,7 @@ export async function downloadPdf(elementId: string, filename: string): Promise<
   const { jsPDF }   = await import("jspdf");
   const canvas = await html2canvas(element, {
     scale: 1.5, useCORS: true, backgroundColor: "#ffffff", logging: false,
+    windowWidth: PDF_RENDER_WIDTH,
   });
   const imgData = canvas.toDataURL("image/png");
   const pdf     = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
