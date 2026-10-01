@@ -233,7 +233,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
                 </strong>
               </span>
             )}
-            {!isOfficeBank && (
+            {!isBank && (
               <span>
                 <span className="muted">Est. earnings: </span>
                 <strong className="mono" style={{ color: "var(--color-text-success)" }}>
