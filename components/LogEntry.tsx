@@ -14,10 +14,12 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
   onSaveTemplate?: (formData: FormState) => void;
   settings: Settings;
 }) {
-  // Hour-bank workers marked "office" only clock in/out + break — no job
-  // description, client or rate, since bank hours aren't billed per entry.
-  const isOfficeBank = settings.excessMode === "bank" && settings.workerType === "office";
-  const officeDefaultRate = settings.tfnRate || settings.defaultRate || "0";
+  // Hour-bank workers aren't billed per entry, so they never pick a rate —
+  // entries use the admin-set TFN rate. Those marked "office" also skip job
+  // description and client, since they only clock in/out + break.
+  const isBank       = settings.excessMode === "bank";
+  const isOfficeBank = isBank && settings.workerType === "office";
+  const bankRate     = settings.tfnRate || settings.defaultRate || "0";
 
   const [form, setForm] = React.useState<FormState>(() =>
     editEntry
@@ -34,7 +36,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
       : {
           date: todayStr(), jobDescription: isOfficeBank ? OFFICE_JOB_DESCRIPTION : "",
           startTime: "", endTime: "",
-          hourlyRate: isOfficeBank ? officeDefaultRate : "", breakMins: "", client: "",
+          hourlyRate: isBank ? bankRate : "", breakMins: "", client: "",
           officeHours: isOfficeBank,
         }
   );
@@ -54,7 +56,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
       ...prev,
       jobDescription: t.jobDescription,
       client:      t.client      ?? "",
-      hourlyRate:  t.hourlyRate  ?? prev.hourlyRate,
+      hourlyRate:  isBank ? prev.hourlyRate : (t.hourlyRate ?? prev.hourlyRate),
       startTime:   t.startTime   ?? prev.startTime,
       endTime:     t.endTime     ?? prev.endTime,
     }));
@@ -71,11 +73,11 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
       setForm(prev => ({
         date: prev.date, jobDescription: isOfficeBank ? OFFICE_JOB_DESCRIPTION : "",
         startTime: "", endTime: "",
-        hourlyRate: isOfficeBank ? officeDefaultRate : "", breakMins: "", client: "",
+        hourlyRate: isBank ? bankRate : "", breakMins: "", client: "",
         officeHours: isOfficeBank,
       }));
     }
-  }, [form, onSave, editEntry, isSaving, isOfficeBank, officeDefaultRate]);
+  }, [form, onSave, editEntry, isSaving, isBank, isOfficeBank, bankRate]);
 
   return (
     <div>
@@ -146,7 +148,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
             <label htmlFor="f-date">Date</label>
             <input id="f-date" type="date" value={form.date} disabled={!!editEntry?.archived} onChange={e => f("date", e.target.value)} />
           </div>
-          {!isOfficeBank && (
+          {!isBank && (
             <div className="field">
               <label htmlFor="f-rate">Hourly rate (AUD)</label>
               <input id="f-rate" type="number" min="0" step="0.01" placeholder="0.00" value={form.hourlyRate} onChange={e => f("hourlyRate", e.target.value)} />
