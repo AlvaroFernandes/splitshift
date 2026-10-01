@@ -466,7 +466,7 @@ export function useAppData() {
   // when entries or the relevant settings actually change, not on every form
   // keystroke or editId update.
 
-  const { allPeriodEntries, processed, weeklyData, totals, tfnPct, chartProcessed } = useMemo(() => {
+  const { allPeriodEntries, processed, weeklyData, totals, chartProcessed } = useMemo(() => {
     const allPeriodEntries = entries.filter(e =>
       (!periodStart || e.date >= periodStart) &&
       (!periodEnd   || e.date <= periodEnd)
@@ -540,21 +540,7 @@ export function useAppData() {
       abnEarnings: a.abnEarnings + e.abnEarnings,
       total:       a.total       + e.totalEarnings,
     }), { hours: 0, tfnHours: 0, abnHours: 0, bankHours: 0, otHours: 0, tfnEarnings: 0, abnEarnings: 0, total: 0 });
-    // tfnPct: current week's TFN progress (period-independent, for the dashboard meter)
-    let tfnPct = 0;
-    if (userRole === "user") {
-      const today   = todayStr();
-      const mon     = weekStart(today);
-      const tfnRateW = parseFloat(settings.tfnRate || "") || undefined;
-      const weekProc = processEntries(
-        entries.filter(e => !e.archived && e.date >= mon && e.date <= today),
-        settings.tfnLimit, tfnRateW, settings.overtimeThreshold || 12, settings.excessMode ?? "abn",
-      );
-      // Use weighted hours (OT = 1.5×) to match how the TFN budget is consumed
-      const weekWeightedTfn = weekProc.reduce((s, e) => s + e.rTFN + e.otTFN * 1.5, 0);
-      tfnPct = Math.min(100, (weekWeightedTfn / (settings.tfnLimit || 30)) * 100);
-    }
-    return { allPeriodEntries, processed, weeklyData, totals, tfnPct, chartProcessed };
+    return { allPeriodEntries, processed, weeklyData, totals, chartProcessed };
   // settings is used wholesale (via processEntriesWithHistory) as well as by field, and
   // invoiceHistory/bankClosures feed the historical-regime lookups for archived entries.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -888,7 +874,7 @@ export function useAppData() {
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
     // derived
-    processed, weeklyData, totals, tfnPct, chartProcessed, TABS, archivedEntries,
+    processed, weeklyData, totals, chartProcessed, TABS, archivedEntries,
     // handlers
     toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,

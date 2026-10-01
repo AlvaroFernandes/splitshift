@@ -103,6 +103,40 @@
 .mt-4{margin-top:16px}
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .metric-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px}
+.overview{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
+.overview-top{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+.overview-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.ov-card{display:flex;flex-direction:column;gap:10px;padding:18px 20px}
+.ov-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ov-title{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.ov-meta{font-size:12px;color:var(--color-text-secondary)}
+.ov-note{font-size:11px;color:var(--color-text-tertiary)}
+.ov-big{display:flex;align-items:baseline;gap:8px;font-size:28px;font-weight:600;line-height:1.1;color:var(--color-text-primary)}
+.ov-big-sub{font-size:13px;font-weight:400;color:var(--color-text-secondary)}
+.ov-progress{height:10px;background:var(--color-background-tertiary);border-radius:99px;overflow:hidden}
+.ov-progress-fill{height:100%;background:var(--color-text-success);border-radius:99px;transition:width 0.6s}
+.ov-progress-fill.full{background:var(--color-text-warning)}
+.ov-progress-labels{display:flex;justify-content:space-between;font-size:12px;color:var(--color-text-secondary)}
+.ov-status{font-size:13px;color:var(--color-text-primary)}
+.week-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:4px}
+.day-cell{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);border:0.5px solid transparent}
+.day-cell.worked{background:var(--color-background-success)}
+.day-cell.today{border-color:var(--color-text-primary)}
+.day-label{font-size:11px;color:var(--color-text-secondary)}
+.day-hours{font-size:12px;color:var(--color-text-primary)}
+.day-cell.worked .day-hours{color:var(--color-text-success);font-weight:500}
+.ov-list{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.ov-list>div{display:flex;justify-content:space-between;gap:12px;padding-bottom:6px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.ov-list>div:last-child{border-bottom:none;padding-bottom:0}
+.ov-list dt{color:var(--color-text-secondary)}
+.ov-list dd{margin:0;color:var(--color-text-primary);text-align:right}
+.todo-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.todo-list li{display:flex;align-items:center;gap:10px;font-size:13px}
+.todo-list li>span{flex:1}
+.todo-list li>.ti{font-size:16px;color:var(--color-text-warning)}
+.todo-btn{padding:4px 10px;font-size:12px;align-self:flex-start}
+.ov-done{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--color-text-success)}
+.section-label{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px}
 .data-table{width:100%;border-collapse:collapse;font-size:13px;contain:paint}
 .data-table th{text-align:left;font-size:10px;font-weight:500;color:var(--color-text-tertiary);padding:6px 10px;border-bottom:0.5px solid var(--color-border-tertiary);white-space:nowrap;text-transform:uppercase;letter-spacing:.06em}
 .data-table td{padding:8px 10px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:middle}
@@ -210,6 +244,7 @@
 
   /* Metric grid: 2 columns min on small */
   .metric-grid{grid-template-columns:repeat(2,1fr)}
+  .overview-top,.overview-row{grid-template-columns:1fr}
 
   /* Toast: respect safe area at bottom */
   .toast{bottom:calc(16px + env(safe-area-inset-bottom));right:12px;left:12px;max-width:none}

@@ -33,7 +33,7 @@ export default function WorkHoursTracker() {
     managedUsers,
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
-    processed, weeklyData, totals, tfnPct, chartProcessed, TABS, archivedEntries,
+    processed, weeklyData, totals, chartProcessed, TABS, archivedEntries,
     toggleTheme, signOut, updatePeriod, clearPeriod,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
@@ -131,10 +131,12 @@ export default function WorkHoursTracker() {
 
       <main className="main-content">
         {tab === "dashboard" && (
-          <Dashboard totals={totals} tfnPct={tfnPct} settings={settings} processed={processed}
+          <Dashboard totals={totals} settings={settings} processed={processed}
             chartProcessed={chartProcessed}
             isAdmin={userRole === "admin"} users={managedUsers}
-            periodStart={periodStart} periodEnd={periodEnd} />
+            periodStart={periodStart} periodEnd={periodEnd}
+            bankClosures={bankClosures} invoiceHistory={invoiceHistory}
+            onNavigate={userRole === "user" ? setTab : undefined} />
         )}
         {tab === "log" && userRole !== "admin" && (
           <LogEntry key={editEntry?.id ?? "new"} editEntry={editEntry}

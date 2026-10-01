@@ -24,3 +24,17 @@ export function payday(date: string): string {
   const fortnight = Math.floor(days / 14);
   return toDateStr(ANCHOR_FORTNIGHT_START + (fortnight * 14 + PAYDAY_OFFSET_DAYS) * DAY_MS);
 }
+
+// The first payday on or after `today` (YYYY-MM-DD).
+export function nextPayday(today: string): string {
+  // Work done 17 days ago is paid between 13 days ago and today; if that
+  // payday has already passed, the next one is 14 days after it.
+  const p = payday(toDateStr(toUtc(today) - PAYDAY_OFFSET_DAYS * DAY_MS));
+  return p >= today ? p : toDateStr(toUtc(p) + 14 * DAY_MS);
+}
+
+// The Mon–Sun fortnight of work a given payday covers.
+export function payFortnight(paydayStr: string): { start: string; end: string } {
+  const start = toUtc(paydayStr) - PAYDAY_OFFSET_DAYS * DAY_MS;
+  return { start: toDateStr(start), end: toDateStr(start + 13 * DAY_MS) };
+}

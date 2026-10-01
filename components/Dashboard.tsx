@@ -1,8 +1,10 @@
 import React, { useMemo } from "react";
-import type { ManagedUser, ProcessedEntry, Settings, Totals } from "@/types";
+import type { ManagedUser, ProcessedEntry, SavedInvoice, Settings, Totals } from "@/types";
+import type { BankClosure } from "@/services/bankClosures";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Metric, Bdg } from "./ui";
 import { EarningsChart } from "./EarningsChart";
+import { WorkerOverview } from "./WorkerOverview";
 
 function csvEsc(v: string | number): string {
   const s = String(v);
@@ -84,10 +86,14 @@ function downloadAdminCSV(
   URL.revokeObjectURL(url);
 }
 
-export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, settings, processed, chartProcessed, isAdmin, users, periodStart, periodEnd }: {
-  totals: Totals; tfnPct: number; settings: Settings; processed: ProcessedEntry[]; chartProcessed: ProcessedEntry[];
+export const Dashboard = React.memo(function Dashboard({ totals, settings, processed, chartProcessed, isAdmin, users, periodStart, periodEnd, bankClosures, invoiceHistory, onNavigate }: {
+  totals: Totals; settings: Settings; processed: ProcessedEntry[]; chartProcessed: ProcessedEntry[];
   isAdmin?: boolean; users?: ManagedUser[];
   periodStart?: string; periodEnd?: string;
+  // Worker view only — feed the "at a glance" overview.
+  bankClosures?: BankClosure[];
+  invoiceHistory?: SavedInvoice[];
+  onNavigate?: (tab: string) => void;
 }) {
   const { byDate, dates } = useMemo(() => {
     const byDate: Record<string, ProcessedEntry[]> = {};
@@ -186,9 +192,18 @@ export const Dashboard = React.memo(function Dashboard({ totals, tfnPct, setting
     <div>
       <h2 className="sr-only">Dashboard overview</h2>
 
+      {onNavigate && (
+        <WorkerOverview processed={chartProcessed} settings={settings}
+          bankClosures={bankClosures ?? []} invoiceHistory={invoiceHistory ?? []}
+          onNavigate={onNavigate} />
+      )}
+
+      <p className="section-label">
+        This period{periodStart && periodEnd ? `: ${fd(periodStart)} – ${fd(periodEnd)}` : ""}
+      </p>
       <div className="metric-grid">
         <Metric label="Total hours"  value={fh(totals.hours)}    sub={`${processed.length} entries`}    />
-        <Metric label="TFN hours"    value={fh(totals.tfnHours)} sub={`of ${settings.tfnLimit}h limit`} color="success" progress={tfnPct} />
+        <Metric label="TFN hours"    value={fh(totals.tfnHours)} sub={`${settings.tfnLimit}h weekly limit`} color="success" />
         {settings.excessMode === "bank"
           ? <Metric label="Hour bank"  value={fh(totals.bankHours)} sub="accrued, not invoiced" color="info" />
           : <Metric label="ABN hours"  value={fh(totals.abnHours)}  sub="invoiceable excess"    color="info" />
