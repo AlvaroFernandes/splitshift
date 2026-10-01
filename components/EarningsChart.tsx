@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import type { ProcessedEntry } from "@/types";
 import { weekStart } from "@/lib/calculations";
+import { payday } from "@/lib/payroll";
 
 function barLabel(key: string, view: "week" | "month"): { line1: string; line2: string } {
   const d = new Date(key + "T00:00:00");
@@ -30,7 +31,10 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
   const bars = useMemo(() => {
     const map: Record<string, { tfn: number; abn: number; total: number }> = {};
     for (const e of processed) {
-      const key = view === "week" ? weekStart(e.date) : e.date.slice(0, 7);
+      // Monthly totals follow when the money is actually paid (fortnightly
+      // Thursdays), not when the work was done — a fortnight spanning two
+      // months is paid in full in the month its payday falls in.
+      const key = view === "week" ? weekStart(e.date) : payday(e.date).slice(0, 7);
       if (!map[key]) map[key] = { tfn: 0, abn: 0, total: 0 };
       map[key].tfn   += e.tfnEarnings;
       map[key].abn   += e.abnEarnings;
@@ -55,7 +59,12 @@ export const EarningsChart = React.memo(function EarningsChart({ processed, isAd
   return (
     <div className="card mt-4">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: 0 }}>Earnings trend</p>
+        <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: 0 }}>
+          Earnings trend
+          <span style={{ color: "var(--color-text-tertiary)", marginLeft: 6 }}>
+            {view === "week" ? "by week worked" : "by payday month"}
+          </span>
+        </p>
         <div style={{ display: "flex", gap: 4 }}>
           {(["week", "month"] as const).map(v => (
             <button
