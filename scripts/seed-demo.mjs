@@ -1,6 +1,9 @@
 // Demo data seed script
 // Run: node scripts/seed-demo.mjs
-// Creates 4 demo workers under your admin account with 8 weeks of realistic entries.
+// Creates a separate demo admin with its own team (ABN, Hour Bank site and
+// office workers, plus a read-only viewer) and 8 weeks of realistic entries.
+// Kept apart from the real admin so demo data never appears in real reports.
+// Re-running it wipes and recreates every demo account.
 
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
@@ -14,7 +17,7 @@ if (existsSync(".env.local")) {
   }
 }
 
-const { NEXT_PUBLIC_SUPABASE_URL: URL, SUPABASE_SERVICE_ROLE_KEY: KEY, ADMIN_EMAIL } = process.env;
+const { NEXT_PUBLIC_SUPABASE_URL: URL, SUPABASE_SERVICE_ROLE_KEY: KEY } = process.env;
 if (!URL || !KEY) { console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"); process.exit(1); }
 
 const supabase = createClient(URL, KEY, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -62,6 +65,7 @@ const WORKERS = [
       yourPhone: "0412 345 678",
       yourEmail: "jake.thompson@demo.splitshift.com.au",
       defaultRate: "58",
+      tfnRate: "45",
       tfnLimit: 38,
       overtimeThreshold: 10,
       companyName: "BuildRight Constructions",
@@ -90,6 +94,7 @@ const WORKERS = [
       yourPhone: "0423 456 789",
       yourEmail: "sarah.chen@demo.splitshift.com.au",
       defaultRate: "95",
+      tfnRate: "70",
       tfnLimit: 20,
       overtimeThreshold: 10,
       companyName: "TechForward Solutions",
@@ -118,6 +123,7 @@ const WORKERS = [
       yourPhone: "0434 567 890",
       yourEmail: "emma.walsh@demo.splitshift.com.au",
       defaultRate: "52",
+      tfnRate: "45",
       tfnLimit: 38,
       overtimeThreshold: 8,
       companyName: "CityHealth Services",
@@ -145,6 +151,7 @@ const WORKERS = [
       yourPhone: "0445 678 901",
       yourEmail: "marcus.rivera@demo.splitshift.com.au",
       defaultRate: "78",
+      tfnRate: "60",
       tfnLimit: 25,
       overtimeThreshold: 9,
       companyName: "Creative Studio Co",
@@ -222,32 +229,43 @@ const VIEWERS = [
   { name: "Priya Nair", email: "priya.nair@demo.splitshift.com.au" },
 ];
 
+// Demo admin — owns the demo team, separate from any real admin account.
+const DEMO_ADMIN = { name: "Demo Admin", email: "admin@demo.splitshift.com.au" };
+const DEMO_PASSWORD = "Demo@SplitShift2026!";
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  // 1. Find admin user
-  const adminEmail = ADMIN_EMAIL || "fernandes.alvaro@gmail.com";
-  const { data: adminProfile } = await supabase
-    .from("profiles").select("user_id").eq("email", adminEmail).maybeSingle();
-
-  if (!adminProfile) {
-    console.error(`Admin profile not found for ${adminEmail}. Make sure you have logged in at least once.`);
-    process.exit(1);
-  }
-  const adminId = adminProfile.user_id;
-  console.log(`Admin found: ${adminEmail} (${adminId})`);
-
-  // 2. Clean up any existing demo workers/viewers
-  const demoEmails = [...WORKERS.map(w => w.email), ...VIEWERS.map(v => v.email)];
+  // 1. Clean up any existing demo accounts (admin, workers, viewers)
+  const demoEmails = [DEMO_ADMIN.email, ...WORKERS.map(w => w.email), ...VIEWERS.map(v => v.email)];
   const { data: existing } = await supabase
     .from("profiles").select("user_id").in("email", demoEmails);
   if (existing?.length) {
     const ids = existing.map(p => p.user_id);
-    await supabase.from("entries").delete().in("user_id", ids);
-    await supabase.from("settings").delete().in("user_id", ids);
+    for (const table of ["entries", "invoices", "bank_closures", "settings"]) {
+      await supabase.from(table).delete().in("user_id", ids);
+    }
+    await supabase.from("audit_log").delete().in("admin_id", ids);
+    // Workers before the admin they point to (profiles.admin_id).
+    await supabase.from("profiles").delete().in("user_id", ids).neq("role", "admin");
     await supabase.from("profiles").delete().in("user_id", ids);
     for (const id of ids) await supabase.auth.admin.deleteUser(id);
-    console.log(`Cleaned up ${ids.length} existing demo worker(s).`);
+    console.log(`Cleaned up ${ids.length} existing demo account(s).`);
   }
+
+  // 2. Create the demo admin
+  const { data: adminAuth, error: adminErr } = await supabase.auth.admin.createUser({
+    email: DEMO_ADMIN.email, password: DEMO_PASSWORD, email_confirm: true,
+  });
+  if (adminErr) { console.error("Auth error for demo admin:", adminErr.message); process.exit(1); }
+  const adminId = adminAuth.user.id;
+  await supabase.from("profiles").upsert({
+    user_id: adminId, name: DEMO_ADMIN.name, email: DEMO_ADMIN.email, role: "admin", admin_id: null,
+  }, { onConflict: "user_id" });
+  await supabase.from("settings").upsert({
+    user_id: adminId,
+    data: { companyName: "Hands On Labour", yourName: DEMO_ADMIN.name, onboardingCompleted: true },
+  });
+  console.log(`✓ ${DEMO_ADMIN.name} — admin account created`);
 
   const weeks = pastWeeks(8);
 
@@ -255,7 +273,7 @@ async function main() {
     // 3. Create real auth user (needed for foreign key on entries table)
     const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
       email:             worker.email,
-      password:          "Demo@SplitShift2026!",
+      password:          DEMO_PASSWORD,
       email_confirm:     true,
       user_metadata:     { invited_role: "user", invited_by: adminId },
     });
@@ -274,7 +292,7 @@ async function main() {
     // 4. Create settings
     await supabase.from("settings").insert({
       user_id:      workerId,
-      data:         { ...worker.settings, invoiceItems: [], templates: [] },
+      data:         { ...worker.settings, invoiceItems: [], templates: [], onboardingCompleted: true },
       period_start: dateStr(weeks[0][0]),
       period_end:   dateStr(weeks[weeks.length - 1][4]),
     });
@@ -314,7 +332,7 @@ async function main() {
   for (const viewer of VIEWERS) {
     const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
       email:         viewer.email,
-      password:      "Demo@SplitShift2026!",
+      password:      DEMO_PASSWORD,
       email_confirm: true,
       user_metadata: { invited_role: "viewer", invited_by: adminId },
     });
@@ -331,7 +349,7 @@ async function main() {
     console.log(`✓ ${viewer.name} — viewer account created`);
   }
 
-  console.log("\nDemo data seeded successfully. Log in as admin to see all workers.");
+  console.log(`\nDemo data seeded. Log in as ${DEMO_ADMIN.email} to see the whole team, or as any worker.`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
