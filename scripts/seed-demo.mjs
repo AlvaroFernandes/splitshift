@@ -1,13 +1,18 @@
 // Demo data seed script
-// Run: node scripts/seed-demo.mjs
+// Run: node --experimental-strip-types scripts/seed-demo.mjs
 // Creates a separate demo admin with its own team (ABN, Hour Bank site and
-// office workers, plus a read-only viewer) and 8 weeks of realistic entries.
+// office workers, plus a read-only viewer) with 8 closed past weeks and the
+// current week (up to today) still open. Past weeks are closed exactly as the
+// app would: ABN weeks over the limit get a saved invoice, every other week a
+// week closure (bank_closures) — so reports, invoices and the Hour Bank all
+// line up. Uses the app's own calculation engine (lib/calculations.ts).
 // Kept apart from the real admin so demo data never appears in real reports.
 // Re-running it wipes and recreates every demo account.
 
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { readFileSync, existsSync } from "fs";
+import { processEntries } from "../lib/calculations.ts";
 
 // ── Load .env.local ──────────────────────────────────────────────────────────
 if (existsSync(".env.local")) {
@@ -51,6 +56,81 @@ function pastWeeks(weeksBack) {
     weeks.push(days); // [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
   }
   return weeks;
+}
+
+// Mon–Sun of the current week
+function currentWeek() {
+  const mon = monday(new Date());
+  return Array.from({ length: 7 }, (_, d) => { const day = new Date(mon); day.setDate(mon.getDate() + d); return day; });
+}
+
+function addDaysStr(date, n) {
+  const d = new Date(date + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return dateStr(d);
+}
+
+// Mirrors closeWeek / createInvoice in hooks/useAppData.ts for every week
+// before `thisMonday`: an ABN week with hours over the limit is invoiced (a
+// saved invoice with its settings snapshot); any other week gets a closure
+// record with the mode and settings it was closed under.
+async function closePastWeeks(userId, s, rows, thisMonday) {
+  const isBank   = s.excessMode === "bank";
+  const tfnLimit = s.tfnLimit || 30;
+  const tfnRate  = parseFloat(s.tfnRate || "") || undefined;
+  const ot       = s.overtimeThreshold || 12;
+  const processed = processEntries(rows.map(r => ({
+    id: r.id, date: r.date, jobDescription: r.job_description, startTime: r.start_time, endTime: r.end_time,
+    hourlyRate: r.hourly_rate, breakMins: r.break_mins, officeHours: r.office_hours, client: r.client ?? undefined,
+  })), tfnLimit, tfnRate, ot, isBank ? "bank" : "abn");
+
+  const byWeek = new Map();
+  for (const e of processed) {
+    const d = new Date(e.date + "T12:00:00");
+    const ws = dateStr(monday(d));
+    if (ws >= thisMonday) continue;
+    if (!byWeek.has(ws)) byWeek.set(ws, []);
+    byWeek.get(ws).push(e);
+  }
+
+  let invoiceNum = s.invoiceNum || 1;
+  let invoices = 0, closures = 0;
+  for (const [ws, week] of [...byWeek].sort(([a], [b]) => a.localeCompare(b))) {
+    const we = addDaysStr(ws, 6);
+    const needsInvoice = !isBank && week.some(e => e.abnPortion > 0);
+    if (needsInvoice) {
+      const invRows = [];
+      for (const e of week) {
+        if (e.rABN > 0)  invRows.push({ key: e.id + "-r",  entryId: e.id, date: e.date, startTime: e.startTime, description: e.jobDescription,                     client: e.client, rate: e.hourlyRate,       hours: e.rABN,  amount: e.rABN  * e.hourlyRate });
+        if (e.otABN > 0) invRows.push({ key: e.id + "-ot", entryId: e.id, date: e.date, startTime: e.startTime, description: `${e.jobDescription} (overtime ×1.5)`, client: e.client, rate: e.hourlyRate * 1.5, hours: e.otABN, amount: e.otABN * e.hourlyRate * 1.5 });
+      }
+      const { error } = await supabase.from("invoices").insert({
+        id: randomUUID(), user_id: userId, invoice_num: invoiceNum,
+        issue_date: addDaysStr(we, 1), company_name: s.companyName || "",
+        subtotal: invRows.reduce((a, r) => a + r.amount, 0),
+        data: { settings: { ...s, invoiceNum, invoiceItems: [] }, rows: invRows, periodStart: ws, periodEnd: we },
+      });
+      if (error) { console.error(`  invoice error (${ws}):`, error.message); continue; }
+      invoiceNum++; invoices++;
+    } else {
+      const { error } = await supabase.from("bank_closures").insert({
+        user_id: userId, week_start: ws, week_end: we,
+        hours: isBank ? week.reduce((a, e) => a + e.bankHours, 0) : 0,
+        mode: isBank ? "bank" : "abn",
+        tfn_limit: tfnLimit, tfn_rate: tfnRate ?? null, overtime_threshold: ot,
+      });
+      if (error) { console.error(`  closure error (${ws}):`, error.message); continue; }
+      closures++;
+    }
+  }
+
+  // Next invoice number continues after the seeded ones.
+  if (invoices > 0) {
+    await supabase.from("settings")
+      .update({ data: { ...s, invoiceItems: [], templates: [], onboardingCompleted: true, invoiceNum } })
+      .eq("user_id", userId);
+  }
+  return { invoices, closures };
 }
 
 // ── Worker definitions ───────────────────────────────────────────────────────
@@ -267,7 +347,8 @@ async function main() {
   });
   console.log(`✓ ${DEMO_ADMIN.name} — admin account created`);
 
-  const weeks = pastWeeks(8);
+  const weeks = [...pastWeeks(8), currentWeek()];
+  const thisMonday = dateStr(weeks[weeks.length - 1][0]);
 
   for (const worker of WORKERS) {
     // 3. Create real auth user (needed for foreign key on entries table)
@@ -294,7 +375,7 @@ async function main() {
       user_id:      workerId,
       data:         { ...worker.settings, invoiceItems: [], templates: [], onboardingCompleted: true },
       period_start: dateStr(weeks[0][0]),
-      period_end:   dateStr(weeks[weeks.length - 1][4]),
+      period_end:   dateStr(weeks[weeks.length - 1][6]),
     });
 
     // 5. Create entries — one per scheduled day per week
@@ -305,16 +386,17 @@ async function main() {
         const day = week[dayOfWeek];
         // Skip if in the future
         if (day > new Date()) continue;
+        const date = dateStr(day);
         entries.push({
           id:              randomUUID(),
           user_id:         workerId,
-          date:            dateStr(day),
+          date,
           job_description: worker.officeClock ? "Office hours" : worker.jobs[jobIdx % worker.jobs.length],
           start_time:      start,
           end_time:        end,
           hourly_rate:     worker.rate,
           break_mins:      brk,
-          archived:        false,
+          archived:        date < thisMonday, // past weeks closed, current week open
           office_hours:    !!worker.officeClock,
           client:          worker.officeClock ? null : worker.client,
           deleted_at:      null,
@@ -324,11 +406,14 @@ async function main() {
     }
 
     const { error } = await supabase.from("entries").insert(entries);
-    if (error) console.error(`Entries error for ${worker.name}:`, error.message);
-    else console.log(`✓ ${worker.name} — ${entries.length} entries created`);
+    if (error) { console.error(`Entries error for ${worker.name}:`, error.message); continue; }
+
+    // 6. Close every past week the way the app does
+    const closed = await closePastWeeks(workerId, worker.settings, entries, thisMonday);
+    console.log(`✓ ${worker.name} — ${entries.length} entries, ${closed.invoices} invoice(s), ${closed.closures} closed week(s) without invoice`);
   }
 
-  // 6. Create viewer (accountant) accounts — read-only, no settings/entries
+  // 7. Create viewer (accountant) accounts — read-only, no settings/entries
   for (const viewer of VIEWERS) {
     const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
       email:         viewer.email,
