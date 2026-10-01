@@ -20,6 +20,46 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Supabase
+
+### Environment variables
+
+Copy `.env.example` to `.env.local` and fill in the values — each one has a comment saying where to find it in the Supabase dashboard.
+
+### Installing the CLI
+
+```bash
+brew install supabase/tap/supabase
+supabase --version
+```
+
+If Homebrew refuses to install it because of untrusted taps, download `supabase_darwin_arm64.tar.gz` from the [latest CLI release](https://github.com/supabase/cli/releases/latest), check it against the release's checksums file, and move the `supabase` binary into a folder on your `PATH` (e.g. `~/.local/bin`).
+
+### Linking the project (once per machine)
+
+```bash
+supabase login
+supabase link --project-ref jeljseyiigcenazjdzcy
+```
+
+`supabase/config.toml` is committed; the link itself is stored in `supabase/.temp/`, which is git-ignored, so every clone needs to run `supabase link` once.
+
+### Migrations
+
+Migrations live in `supabase/migrations/` and are numbered sequentially (`001_…`, `002_…`). To add one, create the next numbered file, then:
+
+```bash
+supabase migration list       # compare local vs. remote
+supabase db push --dry-run    # preview what will run
+supabase db push              # apply to the linked database
+```
+
+If you ever run a migration by hand in the SQL editor, record it so `db push` doesn't try to run it again:
+
+```bash
+supabase migration repair --status applied <number>
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
