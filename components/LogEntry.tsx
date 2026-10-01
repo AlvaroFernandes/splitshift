@@ -4,6 +4,8 @@ import { calcHours, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc, todayStr } from "@/lib/formatters";
 
 const OFFICE_JOB_DESCRIPTION = "Office hours";
+// Office-hours shifts are worked for Hands On itself, not an external client.
+const OFFICE_CLIENT = "Hands On";
 
 export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCancel, clients, templates, onSaveTemplate, settings }: {
   editEntry?: Entry | null;
@@ -51,6 +53,17 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
 
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
+  // Office hours pre-fill the client as Hands On; switching back to site work
+  // clears it again, unless the worker has since typed a different client.
+  const setOfficeHours = (on: boolean) =>
+    setForm(prev => ({
+      ...prev,
+      officeHours: on,
+      client: on
+        ? (prev.client.trim() ? prev.client : OFFICE_CLIENT)
+        : (prev.client === OFFICE_CLIENT ? "" : prev.client),
+    }));
+
   const applyTemplate = (t: EntryTemplate) => {
     setForm(prev => ({
       ...prev,
@@ -73,8 +86,9 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
       setForm(prev => ({
         date: prev.date, jobDescription: isOfficeBank ? OFFICE_JOB_DESCRIPTION : "",
         startTime: "", endTime: "",
-        hourlyRate: isBank ? bankRate : "", breakMins: "", client: "",
-        officeHours: isOfficeBank,
+        hourlyRate: isBank ? bankRate : "", breakMins: "",
+        client: !isOfficeBank && prev.officeHours ? OFFICE_CLIENT : "",
+        officeHours: isOfficeBank || !!prev.officeHours,
       }));
     }
   }, [form, onSave, editEntry, isSaving, isBank, isOfficeBank, bankRate]);
@@ -126,15 +140,40 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
             </span>
           </div>
         )}
-        <div className="form-grid">
-          {!isOfficeBank && (
-            <>
+        {!isOfficeBank && (
+          <div className="log-type">
+            <div className="seg-control" role="radiogroup" aria-label="Type of work">
+              <button type="button" role="radio" aria-checked={!form.officeHours}
+                className={`seg-option${!form.officeHours ? " active" : ""}`}
+                onClick={() => setOfficeHours(false)}>
+                <i className="ti ti-helmet" aria-hidden="true" />
+                Site work
+              </button>
+              <button type="button" role="radio" aria-checked={!!form.officeHours}
+                className={`seg-option${form.officeHours ? " active" : ""}`}
+                onClick={() => setOfficeHours(true)}>
+                <i className="ti ti-building" aria-hidden="true" />
+                Office hours
+              </button>
+            </div>
+            <p className="log-type-hint">
+              {form.officeHours
+                ? "Billed as worked — no 4-hour minimum call."
+                : "4-hour minimum call applies to short shifts."}
+            </p>
+          </div>
+        )}
+
+        {!isOfficeBank && (
+          <section className="form-section">
+            <p className="form-section-title">Job</p>
+            <div className="form-grid">
               <div className="field full">
                 <label htmlFor="f-desc">Job description</label>
                 <input id="f-desc" type="text" placeholder="What did you work on?" value={form.jobDescription} onChange={e => f("jobDescription", e.target.value)} />
               </div>
               <div className="field full">
-                <label htmlFor="f-client">Client / Project <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                <label htmlFor="f-client">Client / Project <span className="label-hint">optional</span></label>
                 <input id="f-client" type="text" list="f-client-list" placeholder="e.g. Acme Corp" value={form.client} onChange={e => f("client", e.target.value)} />
                 {clients && clients.length > 0 && (
                   <datalist id="f-client-list">
@@ -142,44 +181,37 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
                   </datalist>
                 )}
               </div>
-            </>
-          )}
-          <div className="field">
-            <label htmlFor="f-date">Date</label>
-            <input id="f-date" type="date" value={form.date} disabled={!!editEntry?.archived} onChange={e => f("date", e.target.value)} />
-          </div>
-          {!isBank && (
+            </div>
+          </section>
+        )}
+
+        <section className="form-section">
+          {!isOfficeBank && <p className="form-section-title">Time</p>}
+          <div className="form-grid cols-3">
             <div className="field">
-              <label htmlFor="f-rate">Hourly rate (AUD)</label>
-              <input id="f-rate" type="number" min="0" step="0.01" placeholder="0.00" value={form.hourlyRate} onChange={e => f("hourlyRate", e.target.value)} />
+              <label htmlFor="f-date">Date</label>
+              <input id="f-date" type="date" value={form.date} disabled={!!editEntry?.archived} onChange={e => f("date", e.target.value)} />
             </div>
-          )}
-          <div className="field">
-            <label htmlFor="f-start">Start time</label>
-            <input id="f-start" type="time" value={form.startTime} onChange={e => f("startTime", e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="f-end">End time</label>
-            <input id="f-end" type="time" value={form.endTime} onChange={e => f("endTime", e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="f-break">Break (mins, unpaid)</label>
-            <input id="f-break" type="number" min="0" step="5" placeholder="0" value={form.breakMins} onChange={e => f("breakMins", e.target.value)} />
-          </div>
-          {!isOfficeBank && (
-            <div className="field full">
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={form.officeHours === true}
-                  onChange={() => setForm(prev => ({ ...prev, officeHours: !prev.officeHours }))}
-                />
-                Office hours
-                <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-text-tertiary)" }}>(no 4-hour minimum call — billed as worked)</span>
-              </label>
+            <div className="field">
+              <label htmlFor="f-start">Start</label>
+              <input id="f-start" type="time" value={form.startTime} onChange={e => f("startTime", e.target.value)} />
             </div>
-          )}
-        </div>
+            <div className="field">
+              <label htmlFor="f-end">End</label>
+              <input id="f-end" type="time" value={form.endTime} onChange={e => f("endTime", e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="f-break">Break <span className="label-hint">mins, unpaid</span></label>
+              <input id="f-break" type="number" min="0" step="5" placeholder="0" value={form.breakMins} onChange={e => f("breakMins", e.target.value)} />
+            </div>
+            {!isBank && (
+              <div className="field">
+                <label htmlFor="f-rate">Hourly rate <span className="label-hint">AUD</span></label>
+                <input id="f-rate" type="number" min="0" step="0.01" placeholder="0.00" value={form.hourlyRate} onChange={e => f("hourlyRate", e.target.value)} />
+              </div>
+            )}
+          </div>
+        </section>
 
         {previewRaw > 0 && (
           <div className="preview-box">

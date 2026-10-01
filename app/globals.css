@@ -115,6 +115,17 @@
 .field label{font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.07em}
 .field input{background:var(--color-background-secondary);color:var(--color-text-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 10px;font-size:13px}
 .field.full{grid-column:1/-1}
+.form-grid.cols-3{grid-template-columns:repeat(3,1fr)}
+.field label .label-hint{text-transform:none;letter-spacing:0;font-weight:400;color:var(--color-text-tertiary);margin-left:4px}
+.form-section+.form-section{margin-top:16px;padding-top:16px;border-top:0.5px solid var(--color-border-tertiary)}
+.form-section-title{font-size:12px;font-weight:500;color:var(--color-text-primary);margin-bottom:10px}
+.log-type{margin-bottom:16px}
+.log-type-hint{font-size:12px;color:var(--color-text-tertiary);margin-top:6px}
+.seg-control{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--color-background-tertiary);border-radius:var(--border-radius-md)}
+.seg-option{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border:none;border-radius:calc(var(--border-radius-md) - 2px);background:none;color:var(--color-text-secondary);font-size:13px;cursor:pointer;transition:background 0.15s,color 0.15s}
+.seg-option:hover{color:var(--color-text-primary)}
+.seg-option.active{background:var(--color-background-primary);color:var(--color-text-primary);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg-option .ti{font-size:15px}
 .preview-box{display:flex;gap:20px;flex-wrap:wrap;padding:10px 14px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);margin-top:12px;font-size:13px}
 .btn-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .btn-primary{background:var(--color-text-primary);color:var(--color-background-primary);border:none;border-radius:var(--border-radius-md);cursor:pointer;font-size:13px;font-weight:500;padding:8px 16px;display:flex;align-items:center;gap:6px;transition:opacity 0.15s}
@@ -194,7 +205,7 @@
   .main-content{padding:12px 10px}
 
   /* Forms: single column */
-  .form-grid{grid-template-columns:1fr}
+  .form-grid,.form-grid.cols-3{grid-template-columns:1fr}
   .field.full{grid-column:1}
 
   /* Metric grid: 2 columns min on small */
