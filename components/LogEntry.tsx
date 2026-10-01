@@ -7,6 +7,13 @@ const OFFICE_JOB_DESCRIPTION = "Office hours";
 // Office-hours shifts are worked for Hands On itself, not an external client.
 const OFFICE_CLIENT = "Hands On";
 
+const BREAK_OPTIONS = [
+  { value: "0",  label: "None"   },
+  { value: "30", label: "30 min" },
+  { value: "45", label: "45 min" },
+  { value: "60", label: "1 hour" },
+];
+
 export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCancel, clients, templates, onSaveTemplate, settings }: {
   editEntry?: Entry | null;
   onSave: (formData: FormState) => Promise<boolean>;
@@ -50,6 +57,16 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
     const previewH      = form.officeHours ? previewActual : Math.max(MIN_HOURS, previewActual);
     return { breakMinsNum, previewRaw, previewActual, previewH, previewEarn: previewH * parseFloat(form.hourlyRate || "0") };
   }, [form.breakMins, form.startTime, form.endTime, form.hourlyRate, form.officeHours]);
+
+  // An entry saved before the break became a fixed choice may hold another
+  // value — keep it selectable so editing that entry doesn't silently change it.
+  const breakOptions = React.useMemo(() => {
+    const current = String(parseInt(form.breakMins || "0") || 0);
+    return BREAK_OPTIONS.some(o => o.value === current)
+      ? BREAK_OPTIONS
+      : [...BREAK_OPTIONS, { value: current, label: `${current} min` }]
+          .sort((x, y) => Number(x.value) - Number(y.value));
+  }, [form.breakMins]);
 
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -201,8 +218,10 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
               <input id="f-end" type="time" value={form.endTime} onChange={e => f("endTime", e.target.value)} />
             </div>
             <div className="field">
-              <label htmlFor="f-break">Break <span className="label-hint">mins, unpaid</span></label>
-              <input id="f-break" type="number" min="0" step="5" placeholder="0" value={form.breakMins} onChange={e => f("breakMins", e.target.value)} />
+              <label htmlFor="f-break">Break <span className="label-hint">unpaid</span></label>
+              <select id="f-break" value={form.breakMins || "0"} onChange={e => f("breakMins", e.target.value === "0" ? "" : e.target.value)}>
+                {breakOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
             {!isBank && (
               <div className="field">

@@ -113,7 +113,7 @@
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.07em}
-.field input{background:var(--color-background-secondary);color:var(--color-text-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 10px;font-size:13px}
+.field input,.field select{background:var(--color-background-secondary);color:var(--color-text-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 10px;font-size:13px}
 .field.full{grid-column:1/-1}
 .form-grid.cols-3{grid-template-columns:repeat(3,1fr)}
 .field label .label-hint{text-transform:none;letter-spacing:0;font-weight:400;color:var(--color-text-tertiary);margin-left:4px}
