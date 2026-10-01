@@ -8,6 +8,7 @@ interface WorkerRule {
   userId: string;
   name: string;
   tfnLimit: number;
+  tfnRate: string;
   overtimeThreshold: number;
   excessMode: "abn" | "bank";
   workerType: "office" | "site";
@@ -21,7 +22,7 @@ interface Props {
   managedAdmins?: ManagedUser[];
   managedViewers?: ManagedUser[];
   workerSettings?: Record<string, Settings>;
-  onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[]) => void;
+  onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; tfnRate: string; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[]) => void;
   onInvite?: (email: string, role: "user" | "admin" | "viewer", name?: string) => void;
   onResendInvite?: (target: ManagedUser, role: "user" | "admin" | "viewer") => void;
 }
@@ -80,6 +81,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
         userId:            u.id,
         name:              u.name || u.email,
         tfnLimit:          workerSettings?.[u.id]?.tfnLimit          ?? 30,
+        tfnRate:           workerSettings?.[u.id]?.tfnRate           ?? "",
         overtimeThreshold: workerSettings?.[u.id]?.overtimeThreshold ?? 12,
         excessMode:       (workerSettings?.[u.id]?.excessMode        ?? "abn") as "abn" | "bank",
         workerType:       (workerSettings?.[u.id]?.workerType        ?? "site") as "office" | "site",
@@ -87,6 +89,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
       if (prev.length === next.length &&
           prev.every((r, i) => r.userId === next[i].userId &&
                                r.tfnLimit === next[i].tfnLimit &&
+                               r.tfnRate === next[i].tfnRate &&
                                r.overtimeThreshold === next[i].overtimeThreshold &&
                                r.excessMode === next[i].excessMode &&
                                r.workerType === next[i].workerType))
@@ -113,6 +116,9 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
 
   const updateRule = (userId: string, key: "tfnLimit" | "overtimeThreshold", val: number) =>
     setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, [key]: val } : r));
+
+  const updateRuleRate = (userId: string, val: string) =>
+    setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, tfnRate: val } : r));
 
   const updateRuleMode = (userId: string, val: "abn" | "bank") =>
     setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, excessMode: val } : r));
@@ -174,7 +180,8 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
             </div>
             <div className="field">
               <label htmlFor="s-tfnrate">TFN hourly rate (AUD/hr)</label>
-              <input id="s-tfnrate" type="number" min="0" step="0.01" placeholder="Same as entry rate" value={s.tfnRate} onChange={e => f("tfnRate", e.target.value)} />
+              <input id="s-tfnrate" type="number" placeholder="Same as entry rate" value={s.tfnRate} readOnly disabled title="Set by your admin" />
+              <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>Set by your admin</span>
             </div>
             <div className="field">
               <label htmlFor="s-rate">Default ABN rate (AUD/hr)</label>
@@ -320,23 +327,25 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
         {activeTab === "rules" && isAdmin && (
           <>
             <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 16 }}>
-              Set TFN hour limit and overtime threshold for each worker. These rules are applied independently per worker when calculating their hours and earnings. For Hour Bank workers, choose whether they clock in/out only (Office) or use the full entry form (Site).
+              Set TFN hour limit, TFN hourly rate and overtime threshold for each worker. Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. These rules are applied independently per worker when calculating their hours and earnings. For Hour Bank workers, choose whether they clock in/out only (Office) or use the full entry form (Site).
             </p>
             {workerRules.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>No managed workers found.</p>
             ) : (
               <table className="data-table" style={{ marginBottom: 4, tableLayout: "fixed", width: "100%" }}>
                 <colgroup>
-                  <col style={{ width: "26%" }} />
-                  <col style={{ width: "16%" }} />
                   <col style={{ width: "20%" }} />
-                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "15%" }} />
                   <col style={{ width: "20%" }} />
                 </colgroup>
                 <thead>
                   <tr>
                     <th>Worker</th>
                     <th>TFN hour limit</th>
+                    <th style={{ whiteSpace: "normal" }}>TFN rate (AUD/hr)</th>
                     <th style={{ whiteSpace: "normal" }}>Overtime after (hrs/day)</th>
                     <th>Excess hours</th>
                     <th>Worker type</th>
@@ -355,6 +364,16 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                           aria-label={`TFN limit for ${r.name}`}
                         />
                         <span style={{ marginLeft: 6, fontSize: 12, color: "var(--color-text-secondary)" }}>hrs</span>
+                      </td>
+                      <td>
+                        <span style={{ marginRight: 4, fontSize: 12, color: "var(--color-text-secondary)" }}>$</span>
+                        <input
+                          type="number" min="0" step="0.01" placeholder="Entry rate"
+                          value={r.tfnRate}
+                          onChange={e => updateRuleRate(r.userId, e.target.value)}
+                          style={{ width: 90 }}
+                          aria-label={`TFN hourly rate for ${r.name}`}
+                        />
                       </td>
                       <td>
                         <input

@@ -46,6 +46,14 @@ const ACTION_DEFS: Record<string, ActionDef> = {
       return limitChanged ? `${base} (limit ${m.fromTfnLimit}h → ${m.toTfnLimit}h)` : base;
     },
   },
+  worker_rate_changed: {
+    icon:  "ti-currency-dollar",
+    color: "var(--color-text-warning)",
+    label: m => {
+      const fmt = (v: unknown) => v ? `$${Number(v).toFixed(2)}/h` : "entry rate";
+      return `Changed ${m.workerName ?? "worker"}'s TFN rate from ${fmt(m.from)} to ${fmt(m.to)}`;
+    },
+  },
 };
 
 function ActionIcon({ action, color }: { action: string; color: string }) {
