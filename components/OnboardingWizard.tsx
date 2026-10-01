@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase";
 import { PasswordInput } from "@/components/PasswordInput";
 
 const WORKER_STEPS = ["Password", "Profile", "Work & Pay", "Invoicing"] as const;
+// Hour Bank workers are paid TFN only (excess hours are banked), so they never
+// invoice: no ABN or payment details to collect.
+const BANK_STEPS = ["Password", "Profile", "Work & Pay"] as const;
 
 function PasswordFields({ pwd, confirmPwd, pwdError, pwdLoading, onChange }: {
   pwd: string; confirmPwd: string; pwdError: string | null; pwdLoading: boolean;
@@ -60,6 +63,10 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
   });
 
   const f = (k: keyof typeof form, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const isBank   = initialSettings.excessMode === "bank";
+  const isOffice = isBank && initialSettings.workerType === "office";
+  const steps: readonly string[] = isBank ? BANK_STEPS : WORKER_STEPS;
 
   const handlePwdChange = (field: "pwd" | "confirm", val: string) => {
     setPwdError(null);
@@ -125,7 +132,7 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
     );
   }
 
-  // ── Worker: 4-step wizard ───────────────────────────────────────────────────
+  // ── Worker: 4-step wizard (3 steps for Hour Bank) ───────────────────────────
   const canAdvance =
     step === 0 ? true :                          // password step always advanceable
     step === 1 ? form.yourName.trim().length > 0 // profile requires name
@@ -145,7 +152,7 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
 
         {/* Step indicator */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", marginBottom: 28 }}>
-          {WORKER_STEPS.map((label, i) => (
+          {steps.map((label, i) => (
             <React.Fragment key={i}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
                 <div style={{
@@ -163,7 +170,7 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
                   {label}
                 </span>
               </div>
-              {i < WORKER_STEPS.length - 1 && (
+              {i < steps.length - 1 && (
                 <div style={{ flex: 1, height: 1.5, background: i < step ? "var(--color-text-warning)" : "var(--color-border-secondary)", margin: "13px 8px 0" }} />
               )}
             </React.Fragment>
@@ -189,7 +196,7 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
           <>
             <p style={{ fontWeight: 600, fontSize: 16, margin: "0 0 4px" }}>Your profile</p>
             <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 20px" }}>
-              Tell us a bit about yourself. Your name appears on invoices.
+              Tell us a bit about yourself. Your name appears on {isBank ? "your timesheets" : "invoices"}.
             </p>
             <div className="form-grid">
               <div className="field full">
@@ -213,8 +220,37 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
           </>
         )}
 
+        {/* Step 2 — Work & Pay (Hour Bank) */}
+        {step === 2 && isBank && (
+          <>
+            <p style={{ fontWeight: 600, fontSize: 16, margin: "0 0 4px" }}>Work & pay</p>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 20px" }}>
+              {isOffice
+                ? "You'll clock in and out for each shift."
+                : "You'll log each shift with the job and client."}
+              {" "}You&apos;re paid on TFN salary up to {initialSettings.tfnLimit}h a week; any hours over that go into your Hour Bank.
+            </p>
+            {initialSettings.tfnRate ? (
+              <p style={{ fontSize: 13, margin: 0 }}>
+                Your hourly rate is set by your employer: <strong>${initialSettings.tfnRate}/h</strong>.
+              </p>
+            ) : (
+              <div className="form-grid">
+                <div className="field">
+                  <label htmlFor="ob-rate">Hourly rate (AUD/h)</label>
+                  <input id="ob-rate" type="number" min="0" step="0.01" placeholder="0.00" autoFocus
+                    value={form.defaultRate} onChange={e => f("defaultRate", e.target.value)} />
+                </div>
+                <p style={{ fontSize: 11, color: "var(--color-text-tertiary)", margin: 0, gridColumn: "1 / -1" }}>
+                  You can adjust this any time in Settings.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
         {/* Step 2 — Work & Pay */}
-        {step === 2 && (
+        {step === 2 && !isBank && (
           <>
             <p style={{ fontWeight: 600, fontSize: 16, margin: "0 0 4px" }}>Work & pay</p>
             <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 20px" }}>
@@ -275,7 +311,7 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
                 <i className="ti ti-arrow-left" aria-hidden="true" /> Back
               </button>
             )}
-            {step < WORKER_STEPS.length - 1 ? (
+            {step < steps.length - 1 ? (
               <button className="btn-primary" onClick={handleNext} disabled={!canAdvance || pwdLoading}>
                 {pwdLoading ? "Saving…" : "Next"} {!pwdLoading && <i className="ti ti-arrow-right" aria-hidden="true" />}
               </button>
