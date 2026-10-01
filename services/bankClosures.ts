@@ -7,6 +7,10 @@ export interface BankClosure {
   weekEnd: string;
   hours: number;
   createdAt: string;
+  // Mode the week was closed under. "abn" rows are ABN weeks that stayed
+  // within the TFN limit, so they were closed without an invoice — recorded
+  // here so the week keeps its ABN regime if the worker later switches mode.
+  mode: "abn" | "bank";
   // Frozen at closing time — undefined for closures saved before this was
   // tracked, in which case callers should fall back to current settings.
   tfnLimit?: number;
@@ -22,6 +26,7 @@ function fromRow(row: Record<string, unknown>): BankClosure {
     weekEnd:   row.week_end as string,
     hours:     Number(row.hours),
     createdAt: row.created_at as string,
+    mode:      row.mode === "abn" ? "abn" : "bank",
     tfnLimit:          row.tfn_limit          != null ? Number(row.tfn_limit)          : undefined,
     tfnRate:           row.tfn_rate           != null ? Number(row.tfn_rate)           : undefined,
     overtimeThreshold: row.overtime_threshold != null ? Number(row.overtime_threshold) : undefined,
@@ -60,7 +65,7 @@ export async function saveBankClosure(
   supabase: SupabaseClient,
   params: {
     userId: string; weekStart: string; weekEnd: string; hours: number;
-    tfnLimit: number; tfnRate?: number; overtimeThreshold: number;
+    mode: "abn" | "bank"; tfnLimit: number; tfnRate?: number; overtimeThreshold: number;
   },
 ): Promise<BankClosure | null> {
   const { data, error } = await supabase.from("bank_closures").upsert({
@@ -68,6 +73,7 @@ export async function saveBankClosure(
     week_start:         params.weekStart,
     week_end:           params.weekEnd,
     hours:              params.hours,
+    mode:               params.mode,
     tfn_limit:          params.tfnLimit,
     tfn_rate:           params.tfnRate ?? null,
     overtime_threshold: params.overtimeThreshold,

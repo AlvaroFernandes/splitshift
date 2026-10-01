@@ -589,7 +589,7 @@ export function useAppData() {
     // switching modes — e.g. an ex-bank worker now on ABN can still see their
     // frozen bank balance, and an ex-ABN worker now on bank can still see
     // their past invoices.
-    const hasBankHistory    = bankClosures.length > 0;
+    const hasBankHistory    = bankClosures.some(c => c.mode === "bank");
     const hasInvoiceHistory = invoiceHistory.length > 0;
     return [
       { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
@@ -607,7 +607,7 @@ export function useAppData() {
         { id: "history", label: "Invoices",     icon: "ti-history"          },
       ] : []),
     ];
-  }, [userRole, settings.excessMode, bankClosures.length, invoiceHistory.length]);
+  }, [userRole, settings.excessMode, bankClosures, invoiceHistory.length]);
 
   const clients = useMemo(() =>
     [...new Set(entries.map(e => e.client).filter(Boolean))].sort() as string[],
@@ -743,18 +743,19 @@ export function useAppData() {
       const ok = await archiveEntries(supabase, toCloseIds);
       if (!ok) { showToast("Could not close week", "err"); return; }
 
-      // Freeze this week's banked hours permanently — if the worker's mode
-      // later changes, this week must still show as a bank week, not get
-      // silently reprocessed under the new mode.
-      if (isBank) {
-        const bankedHours = weekEntries.reduce((s, e) => s + e.bankHours, 0);
-        const closure = await saveBankClosure(supabase, {
-          userId, weekStart: ws, weekEnd: weekEnd(ws), hours: bankedHours,
-          tfnLimit: settings.tfnLimit, tfnRate: parseFloat(settings.tfnRate || "") || undefined,
-          overtimeThreshold: settings.overtimeThreshold || 12,
-        });
-        if (closure) setBankClosures(prev => [closure, ...prev.filter(c => c.weekStart !== ws)]);
-      }
+      // Freeze this week's mode and settings permanently — if the worker's
+      // mode later changes, this week must keep the regime it was closed
+      // under, not get silently reprocessed under the new one. ABN weeks
+      // closed here have no invoice to carry that snapshot, so they need
+      // this record just as much as bank weeks do.
+      const bankedHours = isBank ? weekEntries.reduce((s, e) => s + e.bankHours, 0) : 0;
+      const closure = await saveBankClosure(supabase, {
+        userId, weekStart: ws, weekEnd: weekEnd(ws), hours: bankedHours,
+        mode: isBank ? "bank" : "abn",
+        tfnLimit: settings.tfnLimit, tfnRate: parseFloat(settings.tfnRate || "") || undefined,
+        overtimeThreshold: settings.overtimeThreshold || 12,
+      });
+      if (closure) setBankClosures(prev => [closure, ...prev.filter(c => c.weekStart !== ws)]);
     }
     setEntries(prev => prev.map(e => toCloseIds.includes(e.id) ? { ...e, archived: true } : e));
     showToast(isBank ? "Week closed — hours banked" : "Week closed — no invoice needed");

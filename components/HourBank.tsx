@@ -19,19 +19,24 @@ interface StatementRow {
   pending: boolean;
 }
 
-// bankClosures: permanent, frozen record of every week closed while on Hour
-// Bank mode (see closeWeek in useAppData.ts). These never change even if the
+// bankClosures: permanent, frozen record of every week closed via closeWeek
+// in useAppData.ts — only the Hour Bank ones count towards the balance. These never change even if the
 // worker's mode is switched later, so past weeks always show their true
 // history. openProcessed: this worker's currently open (not yet closed)
 // entries, live-computed under their current settings — a preview of what
 // would be banked once the active week is closed.
-export const HourBank = React.memo(function HourBank({ bankClosures, openProcessed, settings, periodStart, periodEnd }: {
+export const HourBank = React.memo(function HourBank({ bankClosures: allClosures, openProcessed, settings, periodStart, periodEnd }: {
   bankClosures: BankClosure[];
   openProcessed: ProcessedEntry[];
   settings: Settings;
   periodStart: string;
   periodEnd: string;
 }) {
+  const bankClosures = React.useMemo(
+    () => allClosures.filter(c => c.mode === "bank"),
+    [allClosures],
+  );
+
   const closedBalance = React.useMemo(
     () => bankClosures.reduce((s, c) => s + c.hours, 0),
     [bankClosures],

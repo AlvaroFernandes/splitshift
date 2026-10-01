@@ -65,7 +65,7 @@ export function processEntriesWithHistory(
       tfnLimit: c.tfnLimit ?? settings.tfnLimit ?? 30,
       tfnRate: c.tfnRate ?? (parseFloat(settings.tfnRate || "") || undefined),
       overtimeThreshold: c.overtimeThreshold ?? (settings.overtimeThreshold || 12),
-      excessMode: "bank",
+      excessMode: c.mode,
     });
   }
 
@@ -89,7 +89,7 @@ export function processEntriesWithHistory(
 }
 
 // Which mode actually governed a given week — for labeling reports. Mirrors
-// the same precedence as processEntriesWithHistory: invoice > bank closure >
+// the same precedence as processEntriesWithHistory: invoice > week closure >
 // the worker's current mode (for weeks not yet closed either way).
 export function weekModeMap(
   invoices: SavedInvoice[],
@@ -99,6 +99,6 @@ export function weekModeMap(
   for (const inv of invoices) {
     for (const ws of weeksBetween(inv.data.periodStart, inv.data.periodEnd)) modes.set(ws, "abn");
   }
-  for (const c of bankClosures) modes.set(c.weekStart, "bank");
+  for (const c of bankClosures) modes.set(c.weekStart, c.mode);
   return modes;
 }
