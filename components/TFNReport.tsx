@@ -22,6 +22,9 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
   const regHrs     = tfnEntries.reduce((a, e) => a + e.rTFN,  0);
   const otHrs      = tfnEntries.reduce((a, e) => a + e.otTFN, 0);
   const hasClients = tfnEntries.some(e => e.client);
+  // Overtime counts 1.5× towards the weekly TFN limit, so the hours actually
+  // worked can come in under the limit even when it is fully used.
+  const tfnLimit   = settings.tfnLimit || 30;
 
   // Group TFN entries by Mon–Sun week
   const weekMap = new Map<string, ProcessedEntry[]>();
@@ -140,7 +143,7 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                           {fh(e.rTFN)}
                           {e.otTFN > 0 && (
                             <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)", fontSize: 11 }}>
-                              ({fh(e.rTFN + e.otTFN * 1.5)})
+                              + {fh(e.otTFN)} OT
                             </span>
                           )}
                         </td>
@@ -155,10 +158,13 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                       <td className="mono" style={{ fontWeight: 500 }}>
                         {fh(wRegHrs)}
                         {wOtHrs > 0 && (
-                          <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)", fontSize: 11 }}>
-                            ({fh(wRegHrs + wOtHrs * 1.5)})
+                          <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)", fontSize: 11, fontWeight: 400 }}>
+                            + {fh(wOtHrs)} OT
                           </span>
                         )}
+                        <div style={{ color: "var(--color-text-tertiary)", fontSize: 11, fontWeight: 400 }}>
+                          {fh(wRegHrs + wOtHrs * 1.5)} of {fh(tfnLimit)} limit
+                        </div>
                       </td>
                     </tr>
                   </tfoot>
@@ -172,16 +178,20 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
               <div className="muted" style={{ fontSize: 12 }}>Regular hours</div>
               <div className="mono" style={{ fontSize: 18, fontWeight: 500, color: "var(--color-text-success)" }}>
                 {fh(regHrs)}
-                {otHrs > 0 && (
-                  <span style={{ marginLeft: 6, color: "var(--color-text-tertiary)", fontSize: 13, fontWeight: 400 }}>
-                    ({fh(regHrs + otHrs * 1.5)})
-                  </span>
-                )}
               </div>
             </div>
             <div className="card" style={{ padding: "12px 16px" }}>
               <div className="muted" style={{ fontSize: 12 }}>Overtime hours</div>
               <div className="mono" style={{ fontSize: 18, fontWeight: 500, color: "var(--color-text-warning)" }}>{fh(otHrs)}</div>
+            </div>
+            <div className="card" style={{ padding: "12px 16px" }}>
+              <div className="muted" style={{ fontSize: 12 }}>Towards limit</div>
+              <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>
+                {fh(regHrs + otHrs * 1.5)}
+                <span style={{ marginLeft: 6, color: "var(--color-text-tertiary)", fontSize: 13, fontWeight: 400 }}>
+                  of {fh(tfnLimit * weeks.length)}
+                </span>
+              </div>
             </div>
             <div className="card" style={{ padding: "12px 16px" }}>
               <div className="muted" style={{ fontSize: 12 }}>TFN gross</div>
@@ -192,6 +202,12 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
               <div className="mono" style={{ fontSize: 20, fontWeight: 500 }}>{fc(totalNet)}</div>
             </div>
           </div>
+          {otHrs > 0 && (
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              <i className="ti ti-info-circle" aria-hidden="true" style={{ marginRight: 4 }} />
+              Overtime counts 1.5× towards the weekly limit — e.g. {fh(otHrs)} of overtime uses {fh(otHrs * 1.5)} of it.
+            </p>
+          )}
         </>
       )}
     </div>
