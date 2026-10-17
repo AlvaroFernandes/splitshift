@@ -13,7 +13,7 @@ function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>
     "Date", "Job Description", "Client",
     ...(isAdmin ? ["Worker"] : []),
     "Start", "End", "Break (min)", "Hours", "Rate (AUD/h)",
-    "TFN Hrs", "ABN Hrs", "OT Hrs",
+    "TFN Hrs", "ABN Hrs", "Bank Hrs", "OT Hrs",
     "TFN Earnings", "ABN Earnings", "Total Earnings",
   ].map(csvEsc).join(",");
 
@@ -28,7 +28,8 @@ function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>
     e.total.toFixed(2),
     e.hourlyRate.toFixed(2),
     e.tfnPortion.toFixed(2),
-    e.abnPortion.toFixed(2),
+    (e.abnPortion - e.bankHours).toFixed(2),
+    e.bankHours.toFixed(2),
     e.overtime.toFixed(2),
     e.tfnEarnings.toFixed(2),
     e.abnEarnings.toFixed(2),
@@ -222,7 +223,8 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
                   {!isAdmin && (
                     <td style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
                       {e.tfnPortion > 0 && <Bdg type="tfn">TFN {fh(e.tfnPortion)}</Bdg>}
-                      {e.abnPortion > 0 && <Bdg type="abn">ABN {fh(e.abnPortion)}</Bdg>}
+                      {e.bankHours  > 0 && <Bdg type="bank">Bank {fh(e.bankHours)}</Bdg>}
+                      {e.abnPortion > 0 && e.bankHours === 0 && <Bdg type="abn">ABN {fh(e.abnPortion)}</Bdg>}
                       {e.overtime    > 0 && <Bdg type="ot">OT {fh(e.overtime)}</Bdg>}
                     </td>
                   )}
