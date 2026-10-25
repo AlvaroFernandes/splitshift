@@ -9,6 +9,7 @@ import { WeeklyReport }   from "./WeeklyReport";
 import { TFNReport }      from "./TFNReport";
 import { ABNInvoice }     from "./ABNInvoice";
 import { HourBank }       from "./HourBank";
+import { BankAdmin }      from "./BankAdmin";
 import { InvoiceHistory } from "./InvoiceHistory";
 import { AdminEditModal }    from "./AdminEditModal";
 import { SettingsPage }      from "./SettingsPage";
@@ -28,6 +29,8 @@ export default function WorkHoursTracker() {
     bankClosures,
     invoiceHistoryByWorker,
     bankClosuresByWorker,
+    bankAdjustments,
+    bankAdjustmentsByWorker,
     viewingInvoice, setViewingInvoice,
     userRole,
     managedUsers,
@@ -38,7 +41,7 @@ export default function WorkHoursTracker() {
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
     workerSettings, managedAdmins, clients,
-    advanceInvoice, closeWeek, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
+    advanceInvoice, closeWeek, addBankAdjustment, removeBankAdjustment, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding, handleCompleteOnboarding,
@@ -135,7 +138,7 @@ export default function WorkHoursTracker() {
             chartProcessed={chartProcessed}
             isAdmin={userRole === "admin"} users={managedUsers}
             periodStart={periodStart} periodEnd={periodEnd}
-            bankClosures={bankClosures} invoiceHistory={invoiceHistory}
+            bankClosures={bankClosures} bankAdjustments={bankAdjustments} invoiceHistory={invoiceHistory}
             onNavigate={userRole === "user" ? setTab : undefined} />
         )}
         {tab === "log" && userRole !== "admin" && (
@@ -165,8 +168,13 @@ export default function WorkHoursTracker() {
             periodStart={periodStart} periodEnd={periodEnd} onCloseWeek={closeWeek} />
         )}
         {tab === "bank" && userRole !== "admin" && (
-          <HourBank bankClosures={bankClosures} openProcessed={processed} settings={settings}
+          <HourBank bankClosures={bankClosures} adjustments={bankAdjustments} openProcessed={processed} settings={settings}
             periodStart={periodStart} periodEnd={periodEnd} />
+        )}
+        {tab === "bank" && userRole === "admin" && (
+          <BankAdmin users={managedUsers} workerSettings={workerSettings} processed={chartProcessed}
+            closuresByWorker={bankClosuresByWorker} adjustmentsByWorker={bankAdjustmentsByWorker}
+            onAdd={addBankAdjustment} onRemove={removeBankAdjustment} />
         )}
         {tab === "abn" && userRole !== "admin" && (
           <ABNInvoice processed={processed} settings={settings}

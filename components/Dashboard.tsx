@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import type { ManagedUser, ProcessedEntry, SavedInvoice, Settings, Totals } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
+import type { BankAdjustment } from "@/services/bankAdjustments";
 import { fh, fc, fd } from "@/lib/formatters";
 import { Metric, Bdg } from "./ui";
 import { EarningsChart } from "./EarningsChart";
@@ -86,12 +87,13 @@ function downloadAdminCSV(
   URL.revokeObjectURL(url);
 }
 
-export const Dashboard = React.memo(function Dashboard({ totals, settings, processed, chartProcessed, isAdmin, users, periodStart, periodEnd, bankClosures, invoiceHistory, onNavigate }: {
+export const Dashboard = React.memo(function Dashboard({ totals, settings, processed, chartProcessed, isAdmin, users, periodStart, periodEnd, bankClosures, bankAdjustments, invoiceHistory, onNavigate }: {
   totals: Totals; settings: Settings; processed: ProcessedEntry[]; chartProcessed: ProcessedEntry[];
   isAdmin?: boolean; users?: ManagedUser[];
   periodStart?: string; periodEnd?: string;
   // Worker view only — feed the "at a glance" overview.
   bankClosures?: BankClosure[];
+  bankAdjustments?: BankAdjustment[];
   invoiceHistory?: SavedInvoice[];
   onNavigate?: (tab: string) => void;
 }) {
@@ -194,7 +196,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
 
       {onNavigate && (
         <WorkerOverview processed={chartProcessed} settings={settings}
-          bankClosures={bankClosures ?? []} invoiceHistory={invoiceHistory ?? []}
+          bankClosures={bankClosures ?? []} bankAdjustments={bankAdjustments ?? []} invoiceHistory={invoiceHistory ?? []}
           onNavigate={onNavigate} />
       )}
 

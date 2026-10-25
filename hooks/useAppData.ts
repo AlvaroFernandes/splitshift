@@ -56,6 +56,7 @@ function withStatuses(users: ManagedUser[], statuses: InviteStatusMap): ManagedU
 import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
 import { getInvoices, getInvoicesForWorkers, saveInvoice, updateInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
 import { getBankClosures, getBankClosuresForWorkers, saveBankClosure, type BankClosure } from "@/services/bankClosures";
+import { getBankAdjustments, getBankAdjustmentsForWorkers, saveBankAdjustment, deleteBankAdjustment, type BankAdjustment } from "@/services/bankAdjustments";
 import { logActivity, getAuditLog } from "@/services/audit";
 
 export function useAppData() {
@@ -75,6 +76,7 @@ export function useAppData() {
   const [loading,         setLoading]         = useState(true);
   const [invoiceHistory,  setInvoiceHistory]  = useState<SavedInvoice[]>([]);
   const [bankClosures,    setBankClosures]    = useState<BankClosure[]>([]);
+  const [bankAdjustments, setBankAdjustments] = useState<BankAdjustment[]>([]);
   const [viewingInvoice,  setViewingInvoice]  = useState<SavedInvoice | null>(null);
   const [userRole,        setUserRole]        = useState<UserRole>("user");
   const [managedUsers,    setManagedUsers]    = useState<ManagedUser[]>([]);
@@ -85,6 +87,7 @@ export function useAppData() {
   const [workerSettings,     setWorkerSettings]     = useState<Record<string, Settings>>({});
   const [invoiceHistoryByWorker, setInvoiceHistoryByWorker] = useState<Record<string, SavedInvoice[]>>({});
   const [bankClosuresByWorker,   setBankClosuresByWorker]   = useState<Record<string, BankClosure[]>>({});
+  const [bankAdjustmentsByWorker, setBankAdjustmentsByWorker] = useState<Record<string, BankAdjustment[]>>({});
   const [reminderDismissed,  setReminderDismissed]  = useState(false);
   const [auditLog,           setAuditLog]           = useState<AuditEntry[]>([]);
   const [adminCompanyInfo,   setAdminCompanyInfo]   = useState<{ companyName: string; companyAbn: string; companyAddress: string; companyEmail: string } | null>(null);
@@ -146,15 +149,17 @@ export function useAppData() {
 
           const fetchedEntries = entriesRes.ok ? await entriesRes.json() : [];
           const workerIds = team.users.map(u => u.id);
-          const [fetchedWorkerSettings, fetchedInvoicesByWorker, fetchedClosuresByWorker] = await Promise.all([
+          const [fetchedWorkerSettings, fetchedInvoicesByWorker, fetchedClosuresByWorker, fetchedAdjustmentsByWorker] = await Promise.all([
             getWorkerSettings(supabase, workerIds),
             getInvoicesForWorkers(supabase, workerIds),
             getBankClosuresForWorkers(supabase, workerIds),
+            getBankAdjustmentsForWorkers(supabase, workerIds),
           ]);
           setEntries(fetchedEntries);
           setWorkerSettings(fetchedWorkerSettings);
           setInvoiceHistoryByWorker(fetchedInvoicesByWorker);
           setBankClosuresByWorker(fetchedClosuresByWorker);
+          setBankAdjustmentsByWorker(fetchedAdjustmentsByWorker);
           if (settingsRow) {
             setSettings(settingsRow.settings);
             if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
@@ -180,11 +185,12 @@ export function useAppData() {
             if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
           }
         } else {
-          const [fetchedEntries, settingsRow, invoices, closures, companyRes] = await Promise.all([
+          const [fetchedEntries, settingsRow, invoices, closures, adjustments, companyRes] = await Promise.all([
             getEntries(supabase, user.id),
             fetchSettings(),
             getInvoices(supabase, user.id),
             getBankClosures(supabase, user.id),
+            getBankAdjustments(supabase, user.id),
             fetch("/api/company-info"),
           ]);
           if (companyRes.ok) setAdminCompanyInfo(await companyRes.json());
@@ -196,6 +202,7 @@ export function useAppData() {
           }
           setInvoiceHistory(invoices);
           setBankClosures(closures);
+          setBankAdjustments(adjustments);
         }
 
         setLoading(false);
@@ -563,6 +570,7 @@ export function useAppData() {
       { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
       { id: "entries",   label: "Entries",      icon: "ti-list"             },
       { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
+      { id: "bank",      label: "Hour Bank",    icon: "ti-clock-dollar"     },
       { id: "activity",  label: "Activity",     icon: "ti-activity"         },
     ];
     if (userRole === "viewer") return [
@@ -575,7 +583,7 @@ export function useAppData() {
     // switching modes — e.g. an ex-bank worker now on ABN can still see their
     // frozen bank balance, and an ex-ABN worker now on bank can still see
     // their past invoices.
-    const hasBankHistory    = bankClosures.some(c => c.mode === "bank");
+    const hasBankHistory    = bankClosures.some(c => c.mode === "bank") || bankAdjustments.length > 0;
     const hasInvoiceHistory = invoiceHistory.length > 0;
     return [
       { id: "dashboard", label: "Dashboard",    icon: "ti-layout-dashboard" },
@@ -593,7 +601,7 @@ export function useAppData() {
         { id: "history", label: "Invoices",     icon: "ti-history"          },
       ] : []),
     ];
-  }, [userRole, settings.excessMode, bankClosures, invoiceHistory.length]);
+  }, [userRole, settings.excessMode, bankClosures, bankAdjustments.length, invoiceHistory.length]);
 
   const clients = useMemo(() =>
     [...new Set(entries.map(e => e.client).filter(Boolean))].sort() as string[],
@@ -748,6 +756,37 @@ export function useAppData() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weeklyData, userId, settings.excessMode, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold]); // supabase/showToast/setters stable
 
+  // Admin records a change to a worker's Hour Bank balance — usually that
+  // `hours` banked hours were paid out (negative), or a correction (positive).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const addBankAdjustment = useCallback(async (params: { workerId: string; date: string; hours: number; note: string }): Promise<boolean> => {
+    const uid = userIdRef.current;
+    if (!uid || params.hours === 0) return false;
+    const saved = await saveBankAdjustment(supabase, {
+      userId: params.workerId, createdBy: uid, date: params.date, hours: params.hours, note: params.note,
+    });
+    if (!saved) { showToast("Could not save Hour Bank adjustment", "err"); return false; }
+    setBankAdjustmentsByWorker(prev => ({ ...prev, [params.workerId]: [saved, ...(prev[params.workerId] ?? [])] }));
+    const workerName = managedUsersRef.current.find(u => u.id === params.workerId)?.name ?? "worker";
+    recordAudit("bank_adjusted", "worker", params.workerId, {
+      workerName, hours: params.hours, date: params.date, note: params.note,
+    });
+    showToast(params.hours < 0 ? "Payout recorded — hours deducted from bank" : "Hours added to bank");
+    return true;
+  }, []); // supabase/showToast/setters/refs/recordAudit are stable
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const removeBankAdjustment = useCallback(async (adj: BankAdjustment) => {
+    const ok = await deleteBankAdjustment(supabase, adj.id);
+    if (!ok) { showToast("Could not remove adjustment", "err"); return; }
+    setBankAdjustmentsByWorker(prev => ({ ...prev, [adj.userId]: (prev[adj.userId] ?? []).filter(a => a.id !== adj.id) }));
+    const workerName = managedUsersRef.current.find(u => u.id === adj.userId)?.name ?? "worker";
+    recordAudit("bank_adjustment_removed", "worker", adj.userId, {
+      workerName, hours: adj.hours, date: adj.date, note: adj.note,
+    });
+    showToast("Adjustment removed");
+  }, []); // supabase/showToast/setters/refs/recordAudit are stable
+
   const handleCancelEdit = useCallback(() => {
     setEditId(null);
   }, []); // all stable setters
@@ -868,6 +907,8 @@ export function useAppData() {
     bankClosures,
     invoiceHistoryByWorker,
     bankClosuresByWorker,
+    bankAdjustments,
+    bankAdjustmentsByWorker,
     viewingInvoice, setViewingInvoice,
     userRole,
     managedUsers,
@@ -880,7 +921,7 @@ export function useAppData() {
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
     workerSettings, managedAdmins, clients,
-    advanceInvoice, closeWeek, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
+    advanceInvoice, closeWeek, addBankAdjustment, removeBankAdjustment, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding: !loading && !settings.onboardingCompleted &&

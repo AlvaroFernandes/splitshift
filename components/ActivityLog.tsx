@@ -1,5 +1,6 @@
 import React from "react";
 import type { AuditEntry } from "@/types";
+import { fh } from "@/lib/formatters";
 
 function timeAgo(iso: string): string {
   const diffMs  = Date.now() - new Date(iso).getTime();
@@ -44,6 +45,26 @@ const ACTION_DEFS: Record<string, ActionDef> = {
       const base = `Switched ${m.workerName ?? "worker"} from ${m.from === "bank" ? "Hour Bank" : "ABN"} to ${m.to === "bank" ? "Hour Bank" : "ABN"}`;
       const limitChanged = m.fromTfnLimit !== undefined && m.toTfnLimit !== undefined && m.fromTfnLimit !== m.toTfnLimit;
       return limitChanged ? `${base} (limit ${m.fromTfnLimit}h → ${m.toTfnLimit}h)` : base;
+    },
+  },
+  bank_adjusted: {
+    icon:  "ti-clock-dollar",
+    color: "var(--color-text-bank)",
+    label: m => {
+      const h = Number(m.hours);
+      const amount = fh(Math.abs(h));
+      const base = h < 0
+        ? `Recorded ${amount} paid out from ${m.workerName ?? "worker"}'s Hour Bank`
+        : `Added ${amount} to ${m.workerName ?? "worker"}'s Hour Bank`;
+      return m.note ? `${base} · ${m.note}` : base;
+    },
+  },
+  bank_adjustment_removed: {
+    icon:  "ti-clock-x",
+    color: "var(--color-text-danger)",
+    label: m => {
+      const h = Number(m.hours);
+      return `Removed a ${h < 0 ? "payout" : "correction"} of ${fh(Math.abs(h))} from ${m.workerName ?? "worker"}'s Hour Bank`;
     },
   },
   worker_rate_changed: {

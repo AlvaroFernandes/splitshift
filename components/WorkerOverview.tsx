@@ -1,6 +1,8 @@
 import React, { useMemo } from "react";
 import type { ProcessedEntry, SavedInvoice, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
+import type { BankAdjustment } from "@/services/bankAdjustments";
+import { bankBalance as calcBankBalance } from "@/lib/hourBank";
 import { fh, fc, todayStr } from "@/lib/formatters";
 import { weekStart, weekEnd } from "@/lib/calculations";
 import { nextPayday, payday, payFortnight } from "@/lib/payroll";
@@ -36,10 +38,11 @@ interface TodoItem { key: string; icon: string; text: string; action: string; ta
 // stands against their TFN limit, the next payday, what needs doing, and the
 // rules their admin set. Works off all-time processed entries (each week
 // under its own frozen regime), independent of the header's period filter.
-export const WorkerOverview = React.memo(function WorkerOverview({ processed, settings, bankClosures, invoiceHistory, onNavigate }: {
+export const WorkerOverview = React.memo(function WorkerOverview({ processed, settings, bankClosures, bankAdjustments, invoiceHistory, onNavigate }: {
   processed: ProcessedEntry[];
   settings: Settings;
   bankClosures: BankClosure[];
+  bankAdjustments: BankAdjustment[];
   invoiceHistory: SavedInvoice[];
   onNavigate: (tab: string) => void;
 }) {
@@ -103,11 +106,10 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
   }, [processed, today, isBank, settings.yourName, settings.abn, settings.bsb, settings.accountNumber]);
 
   // ── Hour Bank balance / last invoice ────────────────────────────────────────
-  const bankBalance = useMemo(() => {
-    const closed  = bankClosures.filter(c => c.mode === "bank").reduce((a, c) => a + c.hours, 0);
-    const pending = processed.filter(e => !e.archived).reduce((a, e) => a + e.bankHours, 0);
-    return closed + pending;
-  }, [bankClosures, processed]);
+  const bankBalance = useMemo(
+    () => calcBankBalance(bankClosures, bankAdjustments, processed).balance,
+    [bankClosures, bankAdjustments, processed],
+  );
 
   const lastInvoice = useMemo(
     () => [...invoiceHistory].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0],
