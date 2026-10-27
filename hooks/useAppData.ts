@@ -67,8 +67,10 @@ export function useAppData() {
   const [tab,             setTab]             = useState("dashboard");
   const [entries,         setEntries]         = useState<Entry[]>([]);
   const [settings,        setSettings]        = useState<Settings>(DEFAULT_SETTINGS);
-  const [periodStart,     setPeriodStart]     = useState("");
-  const [periodEnd,       setPeriodEnd]       = useState("");
+  // The header period filter was removed; any period persisted from before is
+  // ignored so it can't silently filter entries with no way to clear it.
+  const [periodStart] = useState("");
+  const [periodEnd]   = useState("");
   const [toast,           setToast]           = useState<Toast | null>(null);
   const [editId,          setEditId]          = useState<string | null>(null);
   const [theme,           setTheme]           = useState<"light" | "dark">("light");
@@ -162,8 +164,6 @@ export function useAppData() {
           setBankAdjustmentsByWorker(fetchedAdjustmentsByWorker);
           if (settingsRow) {
             setSettings(settingsRow.settings);
-            if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
-            if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
           }
         } else if (role === "viewer") {
           if (!adminId) { setLoading(false); return; }
@@ -181,8 +181,6 @@ export function useAppData() {
           setWorkerSettings(fetchedWorkerSettings);
           if (settingsRow) {
             setSettings(settingsRow.settings);
-            if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
-            if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
           }
         } else {
           const [fetchedEntries, settingsRow, invoices, closures, adjustments, companyRes] = await Promise.all([
@@ -197,8 +195,6 @@ export function useAppData() {
           setEntries(fetchedEntries);
           if (settingsRow) {
             setSettings(settingsRow.settings);
-            if (settingsRow.periodStart) setPeriodStart(settingsRow.periodStart);
-            if (settingsRow.periodEnd)   setPeriodEnd(settingsRow.periodEnd);
           }
           setInvoiceHistory(invoices);
           setBankClosures(closures);
@@ -260,19 +256,6 @@ export function useAppData() {
     await supabase.auth.signOut();
     router.push("/login");
   }, []);
-
-  const updatePeriod = useCallback((field: "start" | "end", val: string) => {
-    const ps = field === "start" ? val : periodStart;
-    const pe = field === "end"   ? val : periodEnd;
-    if (field === "start") setPeriodStart(ps); else setPeriodEnd(pe);
-    if (userId) saveSettings(settings, ps, pe);
-  }, [periodStart, periodEnd, userId, settings]); // saveSettings is stable
-
-  const clearPeriod = useCallback(() => {
-    setPeriodStart("");
-    setPeriodEnd("");
-    if (userId) saveSettings(settings, "", "");
-  }, [userId, settings]); // saveSettings/setters are stable
 
   // Recomputes and persists the saved invoice covering `entryDate`, if any, from
   // the current entry data. Lets a worker correct hours/rate on an already-
@@ -917,7 +900,7 @@ export function useAppData() {
     // derived
     processed, weeklyData, totals, chartProcessed, TABS, archivedEntries,
     // handlers
-    toggleTheme, signOut, updatePeriod, clearPeriod,
+    toggleTheme, signOut,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
     workerSettings, managedAdmins, clients,

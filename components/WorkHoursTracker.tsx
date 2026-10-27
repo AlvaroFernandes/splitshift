@@ -37,7 +37,7 @@ export default function WorkHoursTracker() {
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
     processed, weeklyData, totals, chartProcessed, TABS, archivedEntries,
-    toggleTheme, signOut, updatePeriod, clearPeriod,
+    toggleTheme, signOut,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
     handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
     workerSettings, managedAdmins, clients,
@@ -71,17 +71,6 @@ export default function WorkHoursTracker() {
             <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, background: "var(--color-text-info)", color: "#fff", padding: "2px 7px", borderRadius: 4, letterSpacing: "0.04em" }}>
               VIEWER
             </span>
-          )}
-        </div>
-        <div className="period-row">
-          <span>Period:</span>
-          <input type="date" value={periodStart} onChange={e => updatePeriod("start", e.target.value)} aria-label="Period start date" />
-          <span aria-hidden="true">→</span>
-          <input type="date" value={periodEnd}   onChange={e => updatePeriod("end",   e.target.value)} aria-label="Period end date" />
-          {(periodStart || periodEnd) && (
-            <button className="icon-btn" onClick={clearPeriod} aria-label="Clear period filter" title="Clear period">
-              <i className="ti ti-circle-x" aria-hidden="true" />
-            </button>
           )}
         </div>
         <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme">

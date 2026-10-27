@@ -87,9 +87,7 @@
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 .app{min-height:100vh;background:var(--color-background-tertiary);font-size:14px;color:var(--color-text-primary)}
 .header{background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);padding:0 16px;display:flex;align-items:center;gap:10px;height:52px;position:sticky;top:0;z-index:100}
-.logo{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:500;white-space:nowrap;color:var(--color-text-primary)}
-.period-row{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:12px;color:var(--color-text-secondary);flex-wrap:wrap}
-.period-row input{font-size:12px;padding:4px 8px;height:30px;width:auto;min-width:100px;background:var(--color-background-secondary);color:var(--color-text-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md)}
+.logo{display:flex;align-items:center;gap:8px;margin-right:auto;font-size:15px;font-weight:500;white-space:nowrap;color:var(--color-text-primary)}
 .icon-btn{background:none;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);color:var(--color-text-secondary);cursor:pointer;padding:6px 8px;font-size:16px;line-height:1;transition:background 0.15s}
 .icon-btn:hover{background:var(--color-background-secondary);color:var(--color-text-primary)}
 .tabbar{background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;padding:0 12px;overflow-x:auto}
@@ -226,11 +224,9 @@
 
 /* ── Mobile / PWA ── */
 @media (max-width: 600px) {
-  /* Header: stack period row on its own line */
+  /* Header: allow wrapping on narrow screens */
   .header{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}
-  .period-row{margin-left:0;width:100%;order:10;border-top:0.5px solid var(--color-border-tertiary);padding-top:8px}
-  .period-row input{min-width:0;flex:1}
-
+    
   /* Tabs: bigger touch targets */
   .tab-btn{padding:12px 12px;font-size:12px;gap:4px}
   .tab-btn .ti{font-size:16px}

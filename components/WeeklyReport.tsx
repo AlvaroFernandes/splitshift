@@ -14,10 +14,15 @@ function weekLabel(monStr: string): string {
   return `${mon.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
+function monthLabel(monthKey: string): string {
+  return new Date(monthKey + "-01T12:00:00").toLocaleDateString("en-AU", { month: "long", year: "numeric" });
+}
+
 type WeekMode = "abn" | "bank" | "mixed";
+type GroupBy = "week" | "month";
 
 interface WeekSummary {
-  weekStart: string;
+  weekStart: string; // group key — the Monday (YYYY-MM-DD) in week view, or YYYY-MM in the admin's month view
   mode: WeekMode; // which rules actually governed this week — frozen at close time; "mixed" only occurs in the admin combined view when workers under the same calendar week were in different modes
   entries: ProcessedEntry[];
   hours: number;
@@ -142,6 +147,8 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
   const [downloading,   setDownloading]   = React.useState(false);
   const [workerFilter,  setWorkerFilter]  = React.useState("all");
   const [deletingId,    setDeletingId]    = React.useState<string | null>(null);
+  const [groupBy,       setGroupBy]       = React.useState<GroupBy>("week");
+  const byMonth = isAdmin && groupBy === "month";
 
   const canEdit = !isReadOnly && (onEdit || onDelete);
 
@@ -194,9 +201,9 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
   const { weeks, grandTotal, entryModes } = React.useMemo(() => {
     const weekMap: Record<string, ProcessedEntry[]> = {};
     visible.forEach(e => {
-      const ws = weekStart(e.date);
-      if (!weekMap[ws]) weekMap[ws] = [];
-      weekMap[ws].push(e);
+      const key = byMonth ? e.date.slice(0, 7) : weekStart(e.date);
+      if (!weekMap[key]) weekMap[key] = [];
+      weekMap[key].push(e);
     });
 
     // Per-entry mode, keyed by entry id — in the admin combined view this can
@@ -207,7 +214,9 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       const entries = weekMap[ws];
       const modesPresent = new Set<WeekMode>();
       entries.forEach(e => {
-        const m = modeForEntry(e, ws);
+        // Modes are frozen per calendar week, so look up the entry's own week
+        // even when grouping by month.
+        const m = modeForEntry(e, weekStart(e.date));
         entryModes.set(e.id, m);
         modesPresent.add(m);
       });
@@ -232,7 +241,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       // Estimated per pay-period, from that week's own TFN gross — not
       // accumulated per-entry, since the effective tax rate depends on the
       // week's total, not each shift in isolation.
-      week.tfnNetEstimate = estimateNetForPeriod(week.tfnEarnings, 52).net;
+      week.tfnNetEstimate = estimateNetForPeriod(week.tfnEarnings, byMonth ? 12 : 52).net;
       return week;
     });
 
@@ -258,7 +267,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
     }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0 });
 
     return { weeks, grandTotal, entryModes };
-  }, [visible, modeForEntry, fallbackMode]);
+  }, [visible, modeForEntry, fallbackMode, byMonth]);
 
   const userMap = React.useMemo(() =>
     new Map((users ?? []).map(u => [u.id, u.name])),
@@ -267,9 +276,10 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
   if (weeks.length === 0) {
     return (
       <>
-        {isAdmin && users && users.length > 0 && (
-          <div className="no-print" style={{ marginBottom: 16 }}>
-            <WorkerFilter users={users} value={workerFilter} onChange={setWorkerFilter} />
+        {isAdmin && (
+          <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            {users && users.length > 0 && <WorkerFilter users={users} value={workerFilter} onChange={setWorkerFilter} />}
+            <GroupByToggle value={groupBy} onChange={setGroupBy} />
           </div>
         )}
         <div className="empty-state">
@@ -307,13 +317,18 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       <h2 className="sr-only">Weekly report</h2>
 
       <div className="print-actions no-print" style={{ justifyContent: "space-between", alignItems: "center" }}>
-        {isAdmin && users && users.length > 0
-          ? <WorkerFilter users={users} value={workerFilter} onChange={setWorkerFilter} />
+        {isAdmin
+          ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {users && users.length > 0 && <WorkerFilter users={users} value={workerFilter} onChange={setWorkerFilter} />}
+              <GroupByToggle value={groupBy} onChange={setGroupBy} />
+            </span>
+          )
           : <span />
         }
         <button className="btn-secondary" disabled={downloading} onClick={async () => {
           setDownloading(true);
-          await downloadPdf("weekly-report-doc", "Weekly-Report.pdf");
+          await downloadPdf("weekly-report-doc", byMonth ? "Monthly-Report.pdf" : "Weekly-Report.pdf");
           setDownloading(false);
         }}>
           <i className="ti ti-download" aria-hidden="true" />
@@ -322,11 +337,11 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       </div>
 
       <div className="card" style={{ overflowX: "auto" }}>
-        <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>Period summary by week</p>
+        <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>Summary by {byMonth ? "month" : "week"}</p>
         <table className="data-table">
           <thead>
             <tr>
-              <th>Week</th>
+              <th>{byMonth ? "Month" : "Week"}</th>
               <th>Mode</th>
               <th>Entries</th>
               <th>Break</th>
@@ -347,7 +362,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
             {weeks.map(w => (
               <React.Fragment key={w.weekStart}>
                 <tr>
-                  <td style={{ whiteSpace: "nowrap", fontWeight: 500 }}>{weekLabel(w.weekStart)}</td>
+                  <td style={{ whiteSpace: "nowrap", fontWeight: 500 }}>{byMonth ? monthLabel(w.weekStart) : weekLabel(w.weekStart)}</td>
                   <td><Bdg type={w.mode}>{w.mode === "bank" ? "Bank" : w.mode === "mixed" ? "Mixed" : "ABN"}</Bdg></td>
                   <td>{w.entries.length}</td>
                   <td className="mono muted">{w.breakMinsTotal > 0 ? `${w.breakMinsTotal}m` : "—"}</td>
@@ -506,6 +521,31 @@ function WorkerFilter({ users, value, onChange }: { users: ManagedUser[]; value:
         {users.map(u => (
           <option key={u.id} value={u.id}>{u.name || u.email}</option>
         ))}
+      </select>
+    </div>
+  );
+}
+
+function GroupByToggle({ value, onChange }: { value: GroupBy; onChange: (v: GroupBy) => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <i className="ti ti-calendar" style={{ fontSize: 14, color: "var(--color-text-secondary)" }} aria-hidden="true" />
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value as GroupBy)}
+        style={{
+          fontSize: 13,
+          padding: "4px 8px",
+          border: "0.5px solid var(--color-border-secondary)",
+          borderRadius: "var(--border-radius-sm)",
+          background: "var(--color-background-secondary)",
+          color: "var(--color-text-primary)",
+          cursor: "pointer",
+        }}
+        aria-label="Group report by"
+      >
+        <option value="week">By week</option>
+        <option value="month">By month</option>
       </select>
     </div>
   );
