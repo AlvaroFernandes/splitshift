@@ -33,6 +33,23 @@ const ACTION_DEFS: Record<string, ActionDef> = {
     color: "var(--color-text-success)",
     label: m => `Invited ${m.email ?? "user"} as ${m.role ?? "worker"}`,
   },
+  member_removed: {
+    icon:  "ti-user-off",
+    color: "var(--color-text-danger)",
+    label: m => `Removed ${m.email ?? "user"} from the team (history kept)`,
+  },
+  member_restored: {
+    icon:  "ti-user-check",
+    color: "var(--color-text-success)",
+    label: m => `Restored ${m.email ?? "user"}'s access`,
+  },
+  member_updated: {
+    icon:  "ti-user-edit",
+    color: "var(--color-text-info)",
+    label: m => m.fromEmail !== m.toEmail
+      ? `Updated ${m.fromName ?? "user"}'s details (email ${m.fromEmail} → ${m.toEmail})`
+      : `Renamed ${m.fromName ?? "user"} to ${m.toName ?? "—"}`,
+  },
   worker_rules_saved: {
     icon:  "ti-adjustments",
     color: "var(--color-text-warning)",

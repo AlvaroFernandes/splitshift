@@ -39,13 +39,14 @@ function rowsToUsers(data: unknown[]): ManagedUser[] {
     email:     (p.email as string) || "",
     status:    "pending" as const,
     invitedAt: null,
+    removedAt: (p.removed_at as string | null) ?? null,
   }));
 }
 
 export async function getManagedUsers(supabase: SupabaseClient, adminId: string): Promise<ManagedUser[]> {
   const rootAdminId = await resolveRootAdminId(supabase, adminId);
   const { data } = await supabase
-    .from("profiles").select("user_id, name, email")
+    .from("profiles").select("user_id, name, email, removed_at")
     .eq("admin_id", rootAdminId)
     .eq("role", "user");
   return rowsToUsers(data ?? []);
@@ -54,7 +55,7 @@ export async function getManagedUsers(supabase: SupabaseClient, adminId: string)
 export async function getManagedAdmins(supabase: SupabaseClient, adminId: string): Promise<ManagedUser[]> {
   const rootAdminId = await resolveRootAdminId(supabase, adminId);
   const { data } = await supabase
-    .from("profiles").select("user_id, name, email")
+    .from("profiles").select("user_id, name, email, removed_at")
     .eq("admin_id", rootAdminId)
     .eq("role", "admin");
   return rowsToUsers(data ?? []);
@@ -67,9 +68,9 @@ export async function getManagedTeam(
 ): Promise<{ users: ManagedUser[]; admins: ManagedUser[]; viewers: ManagedUser[] }> {
   const rootAdminId = await resolveRootAdminId(supabase, adminId);
   const [usersRes, adminsRes, viewersRes] = await Promise.all([
-    supabase.from("profiles").select("user_id, name, email").eq("admin_id", rootAdminId).eq("role", "user"),
-    supabase.from("profiles").select("user_id, name, email").eq("admin_id", rootAdminId).eq("role", "admin").neq("user_id", rootAdminId),
-    supabase.from("profiles").select("user_id, name, email").eq("admin_id", rootAdminId).eq("role", "viewer"),
+    supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "user"),
+    supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "admin").neq("user_id", rootAdminId),
+    supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "viewer"),
   ]);
   return {
     users:   rowsToUsers(usersRes.data   ?? []),

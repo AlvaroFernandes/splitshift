@@ -8,7 +8,9 @@ function csvEsc(v: string | number): string {
   return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>, isAdmin: boolean) {
+function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>, isAdmin: boolean, moneyHidden: (e: ProcessedEntry) => boolean) {
+  // Hour Bank workers' rows leave the money columns blank.
+  const money = (e: ProcessedEntry, v: number) => moneyHidden(e) ? "" : v.toFixed(2);
   const header = [
     "Date", "Job Description", "Client",
     ...(isAdmin ? ["Worker"] : []),
@@ -26,14 +28,14 @@ function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>
     e.endTime,
     e.breakMins,
     e.total.toFixed(2),
-    e.hourlyRate.toFixed(2),
+    money(e, e.hourlyRate),
     e.tfnPortion.toFixed(2),
     (e.abnPortion - e.bankHours).toFixed(2),
     e.bankHours.toFixed(2),
     e.overtime.toFixed(2),
-    e.tfnEarnings.toFixed(2),
-    e.abnEarnings.toFixed(2),
-    e.totalEarnings.toFixed(2),
+    money(e, e.tfnEarnings),
+    money(e, e.abnEarnings),
+    money(e, e.totalEarnings),
   ].map(csvEsc).join(","));
 
   const blob = new Blob([[header, ...lines].join("\r\n")], { type: "text/csv;charset=utf-8;" });
@@ -45,8 +47,10 @@ function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>
   URL.revokeObjectURL(url);
 }
 
-export const EntriesList = React.memo(function EntriesList({ processed, archivedProcessed, onEdit, onDelete, isAdmin, isReadOnly, users, userFilter, onUserFilterChange }: {
+export const EntriesList = React.memo(function EntriesList({ processed, archivedProcessed, onEdit, onDelete, isAdmin, isReadOnly, users, userFilter, onUserFilterChange, isHoursOnly }: {
   processed: ProcessedEntry[];
+  // True when the entry's worker is on Hour Bank — their money is never shown.
+  isHoursOnly?: (ownerId?: string | null) => boolean;
   archivedProcessed?: ProcessedEntry[];
   onEdit: (e: ProcessedEntry) => void;
   onDelete: (id: string) => void | Promise<void>;
@@ -93,6 +97,13 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
   );
 
   const hasClients = clientOptions.length > 0;
+
+  const moneyHidden = React.useCallback(
+    (e: ProcessedEntry) => isHoursOnly?.(e.ownerId) ?? false,
+    [isHoursOnly],
+  );
+  // Drop the Rate/Earnings columns when every visible entry is Hour Bank.
+  const hideMoney = visible.length > 0 && visible.every(moneyHidden);
 
   return (
     <div>
@@ -142,7 +153,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
           <button
             className="btn-secondary"
             style={{ fontSize: 12, padding: "4px 10px", marginLeft: "auto" }}
-            onClick={() => downloadEntriesCSV(visible, userMap, !!isAdmin)}
+            onClick={() => downloadEntriesCSV(visible, userMap, !!isAdmin, moneyHidden)}
             disabled={visible.length === 0}
           >
             <i className="ti ti-download" aria-hidden="true" /> CSV
@@ -155,7 +166,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
           <button
             className="btn-secondary"
             style={{ fontSize: 12, padding: "4px 10px" }}
-            onClick={() => downloadEntriesCSV(visible, userMap, !!isAdmin)}
+            onClick={() => downloadEntriesCSV(visible, userMap, !!isAdmin, moneyHidden)}
           >
             <i className="ti ti-download" aria-hidden="true" /> CSV
           </button>
@@ -177,9 +188,10 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
                 <th>Job</th>
                 {hasClients && <th>Client</th>}
                 <th>Time</th>
-                <th>Hours</th><th>Rate</th>
+                <th>Hours</th>
+                {!hideMoney && <th>Rate</th>}
                 {!isAdmin && <th>Split</th>}
-                <th>Earnings</th>
+                {!hideMoney && <th>Earnings</th>}
                 {!isReadOnly && <th></th>}
               </tr>
             </thead>
@@ -219,7 +231,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
                       </span>
                     )}
                   </td>
-                  <td className="mono">{fc(e.hourlyRate)}/h</td>
+                  {!hideMoney && <td className="mono">{moneyHidden(e) ? <span className="muted">—</span> : `${fc(e.hourlyRate)}/h`}</td>}
                   {!isAdmin && (
                     <td style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
                       {e.tfnPortion > 0 && <Bdg type="tfn">TFN {fh(e.tfnPortion)}</Bdg>}
@@ -228,7 +240,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
                       {e.overtime    > 0 && <Bdg type="ot">OT {fh(e.overtime)}</Bdg>}
                     </td>
                   )}
-                  <td className="mono">{fc(e.totalEarnings)}</td>
+                  {!hideMoney && <td className="mono">{moneyHidden(e) ? <span className="muted">—</span> : fc(e.totalEarnings)}</td>}
                   {!isReadOnly && (
                     <td>
                       <span style={{ display: "flex", gap: 4 }}>

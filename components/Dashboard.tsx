@@ -17,7 +17,10 @@ function downloadAdminCSV(
   users: ManagedUser[],
   periodStart: string,
   periodEnd: string,
+  isHoursOnly: (ownerId?: string | null) => boolean,
 ) {
+  // Hour Bank workers' rows leave the money columns blank.
+  const money = (ownerId: string | undefined, v: number) => isHoursOnly(ownerId) ? "" : v.toFixed(2);
   const byUser = new Map<string, ProcessedEntry[]>();
   for (const e of processed) {
     const uid = e.ownerId ?? "";
@@ -49,9 +52,9 @@ function downloadAdminCSV(
       ue.reduce((a, e) => a + e.tfnPortion,   0).toFixed(2),
       ue.reduce((a, e) => a + e.abnPortion,   0).toFixed(2),
       ue.reduce((a, e) => a + e.overtime,     0).toFixed(2),
-      ue.reduce((a, e) => a + e.tfnEarnings,  0).toFixed(2),
-      ue.reduce((a, e) => a + e.abnEarnings,  0).toFixed(2),
-      ue.reduce((a, e) => a + e.totalEarnings,0).toFixed(2),
+      money(u.id, ue.reduce((a, e) => a + e.tfnEarnings,  0)),
+      money(u.id, ue.reduce((a, e) => a + e.abnEarnings,  0)),
+      money(u.id, ue.reduce((a, e) => a + e.totalEarnings,0)),
     ].map(csvEsc).join(","));
   }
 
@@ -72,9 +75,9 @@ function downloadAdminCSV(
     const workerName = workerMap.get(e.ownerId ?? "")?.name ?? "Unknown";
     rows.push([
       e.date, workerName, e.jobDescription, e.client ?? "",
-      e.startTime, e.endTime, e.breakMins, e.total.toFixed(2), e.hourlyRate.toFixed(2),
+      e.startTime, e.endTime, e.breakMins, e.total.toFixed(2), money(e.ownerId, e.hourlyRate),
       e.tfnPortion.toFixed(2), e.abnPortion.toFixed(2), e.overtime.toFixed(2),
-      e.tfnEarnings.toFixed(2), e.abnEarnings.toFixed(2), e.totalEarnings.toFixed(2),
+      money(e.ownerId, e.tfnEarnings), money(e.ownerId, e.abnEarnings), money(e.ownerId, e.totalEarnings),
     ].map(csvEsc).join(","));
   }
 
@@ -87,7 +90,7 @@ function downloadAdminCSV(
   URL.revokeObjectURL(url);
 }
 
-export const Dashboard = React.memo(function Dashboard({ totals, settings, processed, chartProcessed, isAdmin, users, periodStart, periodEnd, bankClosures, bankAdjustments, invoiceHistory, onNavigate }: {
+export const Dashboard = React.memo(function Dashboard({ totals, settings, processed, chartProcessed, isAdmin, users, periodStart, periodEnd, bankClosures, bankAdjustments, invoiceHistory, onNavigate, isHoursOnly = () => false }: {
   totals: Totals; settings: Settings; processed: ProcessedEntry[]; chartProcessed: ProcessedEntry[];
   isAdmin?: boolean; users?: ManagedUser[];
   periodStart?: string; periodEnd?: string;
@@ -96,7 +99,17 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
   bankAdjustments?: BankAdjustment[];
   invoiceHistory?: SavedInvoice[];
   onNavigate?: (tab: string) => void;
+  // True when the worker is on Hour Bank — their money is never shown.
+  isHoursOnly?: (ownerId?: string | null) => boolean;
 }) {
+  // Worker view: an Hour Bank worker sees hours only.
+  const hoursOnly = !isAdmin && isHoursOnly();
+  // Admin view: Hour Bank workers' earnings stay out of the chart.
+  const chartEntries = useMemo(
+    () => isAdmin ? chartProcessed.filter(e => !isHoursOnly(e.ownerId)) : chartProcessed,
+    [isAdmin, chartProcessed, isHoursOnly],
+  );
+
   const { byDate, dates } = useMemo(() => {
     const byDate: Record<string, ProcessedEntry[]> = {};
     for (const e of processed) { if (!byDate[e.date]) byDate[e.date] = []; byDate[e.date].push(e); }
@@ -127,7 +140,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
           <Metric label="Users"       value={String(users.length)} sub="managed" />
         </div>
 
-        <EarningsChart processed={chartProcessed} isAdmin />
+        <EarningsChart processed={chartEntries} isAdmin />
 
         {userStats.length > 0 && (
           <div className="card mt-4" style={{ overflowX: "auto" }}>
@@ -136,7 +149,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
               <button
                 className="btn-secondary"
                 style={{ fontSize: 12, padding: "4px 10px" }}
-                onClick={() => downloadAdminCSV(processed, users, periodStart ?? "", periodEnd ?? "")}
+                onClick={() => downloadAdminCSV(processed, users, periodStart ?? "", periodEnd ?? "", isHoursOnly)}
               >
                 <i className="ti ti-download" aria-hidden="true" /> Export CSV
               </button>
@@ -154,7 +167,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
                     </td>
                     <td>{u.entries}</td>
                     <td className="mono">{fh(u.hours)}</td>
-                    <td className="mono">{fc(u.earnings)}</td>
+                    <td className="mono">{isHoursOnly(u.id) ? <span className="muted">—</span> : fc(u.earnings)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -178,7 +191,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
                       <td style={{ fontSize: 12 }}>{userMap.get(e.ownerId ?? "") ?? "—"}</td>
                       <td style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{e.jobDescription}</td>
                       <td className="mono">{fh(e.total)}</td>
-                      <td className="mono">{fc(e.totalEarnings)}</td>
+                      <td className="mono">{isHoursOnly(e.ownerId) ? <span className="muted">—</span> : fc(e.totalEarnings)}</td>
                     </tr>
                   ));
                 })}
@@ -197,7 +210,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
       {onNavigate && (
         <WorkerOverview processed={chartProcessed} settings={settings}
           bankClosures={bankClosures ?? []} bankAdjustments={bankAdjustments ?? []} invoiceHistory={invoiceHistory ?? []}
-          onNavigate={onNavigate} />
+          onNavigate={onNavigate} hideMoney={hoursOnly} />
       )}
 
       <p className="section-label">
@@ -212,15 +225,19 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
         }
         <Metric label="Overtime"     value={fh(totals.otHours)}  sub="×1.5 rate applied"               color="warning" />
       </div>
-      <div className="metric-grid mt-3">
-        <Metric label="TFN earnings"   value={fc(totals.tfnEarnings)} color="success" />
-        {settings.excessMode !== "bank" && (
-          <Metric label="ABN earnings" value={fc(totals.abnEarnings)} color="info" />
-        )}
-        <Metric label="Total earnings" value={fc(totals.total)}       bold />
-      </div>
+      {!hoursOnly && (
+        <>
+          <div className="metric-grid mt-3">
+            <Metric label="TFN earnings"   value={fc(totals.tfnEarnings)} color="success" />
+            {settings.excessMode !== "bank" && (
+              <Metric label="ABN earnings" value={fc(totals.abnEarnings)} color="info" />
+            )}
+            <Metric label="Total earnings" value={fc(totals.total)}       bold />
+          </div>
 
-      <EarningsChart processed={chartProcessed} />
+          <EarningsChart processed={chartProcessed} />
+        </>
+      )}
 
       {dates.length > 0 ? (
         <div className="card mt-4">
@@ -232,7 +249,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
                   <th>Date</th><th>Jobs</th><th>Hours</th>
                   <th>Overtime</th><th>TFN</th>
                   <th>{settings.excessMode === "bank" ? "Bank" : "ABN"}</th>
-                  <th>Earnings</th>
+                  {!hoursOnly && <th>Earnings</th>}
                 </tr>
               </thead>
               <tbody>
@@ -254,7 +271,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
                       <td>{d.ot  > 0 ? <Bdg type="ot">{fh(d.ot)}</Bdg>       : <span className="muted">—</span>}</td>
                       <td>{d.tfn > 0 ? <Bdg type="tfn">{fh(d.tfn)}</Bdg>     : <span className="muted">—</span>}</td>
                       <td>{d.abn > 0 ? <Bdg type={abnType}>{fh(d.abn)}</Bdg> : <span className="muted">—</span>}</td>
-                      <td className="mono">{fc(d.earn)}</td>
+                      {!hoursOnly && <td className="mono">{fc(d.earn)}</td>}
                     </tr>
                   );
                 })}
@@ -267,7 +284,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
           <i className="ti ti-clock" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
           <p>No entries in this period</p>
           <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-            Set a period in the header, then log your first job
+            Log your first job to see it here
           </p>
         </div>
       )}

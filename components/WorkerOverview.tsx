@@ -38,13 +38,14 @@ interface TodoItem { key: string; icon: string; text: string; action: string; ta
 // stands against their TFN limit, the next payday, what needs doing, and the
 // rules their admin set. Works off all-time processed entries (each week
 // under its own frozen regime), independent of the header's period filter.
-export const WorkerOverview = React.memo(function WorkerOverview({ processed, settings, bankClosures, bankAdjustments, invoiceHistory, onNavigate }: {
+export const WorkerOverview = React.memo(function WorkerOverview({ processed, settings, bankClosures, bankAdjustments, invoiceHistory, onNavigate, hideMoney }: {
   processed: ProcessedEntry[];
   settings: Settings;
   bankClosures: BankClosure[];
   bankAdjustments: BankAdjustment[];
   invoiceHistory: SavedInvoice[];
   onNavigate: (tab: string) => void;
+  hideMoney?: boolean; // Hour Bank worker — hours only
 }) {
   const isBank   = settings.excessMode === "bank";
   const tfnLimit = settings.tfnLimit || 30;
@@ -162,12 +163,16 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
             <span>{new Date(pay.date + "T12:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}</span>
           </div>
           <p className="ov-meta">For work {shortDate(pay.covers.start)} – {shortDate(pay.covers.end)}</p>
-          <dl className="ov-list">
-            <div><dt>TFN gross</dt><dd className="mono">{fc(pay.tfn)}</dd></div>
-            <div><dt>TFN take-home (est.)</dt><dd className="mono">{fc(pay.tfnNet)}</dd></div>
-            {!isBank && <div><dt>ABN invoices</dt><dd className="mono">{fc(pay.abn)}</dd></div>}
-          </dl>
-          <p className="ov-note">Estimates from the hours logged so far for that fortnight.</p>
+          {!hideMoney && (
+            <>
+              <dl className="ov-list">
+                <div><dt>TFN gross</dt><dd className="mono">{fc(pay.tfn)}</dd></div>
+                <div><dt>TFN take-home (est.)</dt><dd className="mono">{fc(pay.tfnNet)}</dd></div>
+                {!isBank && <div><dt>ABN invoices</dt><dd className="mono">{fc(pay.abn)}</dd></div>}
+              </dl>
+              <p className="ov-note">Estimates from the hours logged so far for that fortnight.</p>
+            </>
+          )}
         </section>
       </div>
 
@@ -225,7 +230,7 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
           </div>
           <dl className="ov-list">
             <div><dt>Weekly TFN limit</dt><dd className="mono">{fh(tfnLimit)}</dd></div>
-            <div><dt>TFN rate</dt><dd className="mono">{isNaN(tfnRate) ? "Entry rate" : `${fc(tfnRate)}/h`}</dd></div>
+            {!hideMoney && <div><dt>TFN rate</dt><dd className="mono">{isNaN(tfnRate) ? "Entry rate" : `${fc(tfnRate)}/h`}</dd></div>}
             <div><dt>Overtime after</dt><dd className="mono">{fh(settings.overtimeThreshold || 12)} / shift</dd></div>
             <div><dt>Extra hours go to</dt><dd>{isBank ? "Hour Bank" : "ABN invoice"}</dd></div>
             {isBank && <div><dt>Worker type</dt><dd>{settings.workerType === "office" ? "Office" : "Site"}</dd></div>}

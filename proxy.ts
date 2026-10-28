@@ -39,6 +39,26 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // A removed team member's ban stops new sign-ins and token refreshes, but an
+  // already-issued session stays valid until it expires — end it here.
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles").select("removed_at").eq("user_id", user.id).maybeSingle();
+    if ((profile as { removed_at: string | null } | null)?.removed_at) {
+      await supabase.auth.signOut();
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Access removed" }, { status: 403 });
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "?error=removed";
+      const res = NextResponse.redirect(url);
+      // Carry over the cleared auth cookies from signOut.
+      supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c));
+      return res;
+    }
+  }
+
   if (user && pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";

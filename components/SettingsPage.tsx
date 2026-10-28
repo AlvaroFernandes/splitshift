@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import type { EntryTemplate, ManagedUser, Settings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/services/settings";
 import { createClient } from "@/lib/supabase";
-import { Bdg } from "./ui";
 
 interface WorkerRule {
   userId: string;
@@ -19,59 +18,22 @@ interface Props {
   onSave: (s: Settings) => void;
   isAdmin?: boolean;
   managedUsers?: ManagedUser[];
-  managedAdmins?: ManagedUser[];
-  managedViewers?: ManagedUser[];
   workerSettings?: Record<string, Settings>;
   onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; tfnRate: string; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[]) => void;
-  onInvite?: (email: string, role: "user" | "admin" | "viewer", name?: string) => void;
-  onResendInvite?: (target: ManagedUser, role: "user" | "admin" | "viewer") => void;
 }
 
-export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, managedAdmins, managedViewers, workerSettings, onSaveWorkerRules, onInvite, onResendInvite }: Props) {
+export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, workerSettings, onSaveWorkerRules }: Props) {
   const [s, setS] = useState<Settings>({ ...DEFAULT_SETTINGS, ...settings });
   const [workerRules,    setWorkerRules]    = useState<WorkerRule[]>([]);
-  const [inviteName,     setInviteName]     = useState("");
-  const [inviteEmail,    setInviteEmail]    = useState("");
-  const [inviteRole,     setInviteRole]     = useState<"user" | "admin" | "viewer">("user");
-  const [inviteSending,  setInviteSending]  = useState(false);
-  const [resendingId,    setResendingId]    = useState<string | null>(null);
   const [newPwd,         setNewPwd]         = useState("");
   const [confirmPwd,     setConfirmPwd]     = useState("");
   const [pwdLoading,     setPwdLoading]     = useState(false);
   const [pwdMsg,         setPwdMsg]         = useState<{ text: string; ok: boolean } | null>(null);
 
   const defaultTab = isAdmin ? "company" : "personal";
-  const [activeTab, setActiveTab] = useState<"personal" | "rules" | "team" | "payment" | "company">(defaultTab as "personal" | "rules" | "team" | "payment" | "company");
+  const [activeTab, setActiveTab] = useState<"personal" | "rules" | "payment" | "company">(defaultTab as "personal" | "rules" | "payment" | "company");
 
   const f = (k: keyof Settings, v: string | number) => setS(prev => ({ ...prev, [k]: v }));
-
-  const resendInvite = async (u: ManagedUser, role: "user" | "admin" | "viewer") => {
-    if (resendingId) return;
-    setResendingId(u.id);
-    await onResendInvite?.(u, role);
-    setResendingId(null);
-  };
-
-  const statusCell = (u: ManagedUser, role: "user" | "admin" | "viewer") => (
-    <td>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        {u.status === "accepted" && <Bdg type="tfn">Accepted</Bdg>}
-        {u.status === "pending"  && <Bdg type="ot">Pending</Bdg>}
-        {u.status === "expired"  && <Bdg type="danger">Expired</Bdg>}
-        {u.status !== "accepted" && (
-          <button
-            type="button"
-            className="btn-secondary"
-            style={{ fontSize: 11, padding: "3px 9px" }}
-            disabled={resendingId === u.id}
-            onClick={() => resendInvite(u, role)}
-          >
-            {resendingId === u.id ? "Sending…" : "Resend"}
-          </button>
-        )}
-      </div>
-    </td>
-  );
 
   useEffect(() => { setS({ ...DEFAULT_SETTINGS, ...settings }); }, [settings]);
 
@@ -102,7 +64,6 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
     ...(isAdmin ? [] : [{ id: "personal" as const, label: "Personal",   icon: "ti-user"        }]),
     ...(isAdmin ? [{ id: "company" as const, label: "Company",    icon: "ti-building"    }] : []),
     ...(isAdmin ? [{ id: "rules"   as const, label: "Work Rules", icon: "ti-adjustments" }] : []),
-    ...(isAdmin ? [{ id: "team"    as const, label: "Team",       icon: "ti-users"       }] : []),
     ...(isAdmin ? [] : [{ id: "payment"  as const, label: "Payment",    icon: "ti-credit-card" }]),
   ];
 
@@ -454,114 +415,6 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
           </div>
         )}
 
-        {activeTab === "team" && isAdmin && (
-          <>
-            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 20 }}>
-              Invite workers or co-admins. They will receive an email with a sign-in link and automatically be linked to your team.
-            </p>
-
-            <form
-              onSubmit={async e => {
-                e.preventDefault();
-                if (!inviteEmail || inviteSending) return;
-                setInviteSending(true);
-                await onInvite?.(inviteEmail, inviteRole, inviteName);
-                setInviteName("");
-                setInviteEmail("");
-                setInviteSending(false);
-              }}
-              style={{ display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap" }}
-            >
-              <input
-                type="text" placeholder="Employee name"
-                value={inviteName} onChange={e => setInviteName(e.target.value)}
-                style={{ flex: 1, minWidth: 160 }}
-              />
-              <input
-                type="email" required placeholder="Email address"
-                value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
-                style={{ flex: 1, minWidth: 200 }}
-              />
-              <select
-                value={inviteRole} onChange={e => setInviteRole(e.target.value as "user" | "admin" | "viewer")}
-                style={{
-                  padding: "7px 10px", fontSize: 13,
-                  border: "0.5px solid var(--color-border-secondary)",
-                  borderRadius: "var(--border-radius-md)",
-                  background: "var(--color-background-secondary)",
-                  color: "var(--color-text-primary)",
-                }}
-              >
-                <option value="user">Worker</option>
-                <option value="admin">Admin</option>
-                <option value="viewer">Viewer (accountant)</option>
-              </select>
-              <button type="submit" className="btn-primary" disabled={inviteSending}>
-                <i className="ti ti-send" aria-hidden="true" />
-                {inviteSending ? "Sending…" : "Send invite"}
-              </button>
-            </form>
-
-            {(managedAdmins ?? []).length > 0 && (
-              <>
-                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8 }}>Co-admins</p>
-                <table className="data-table" style={{ marginBottom: 20 }}>
-                  <thead><tr><th>Name</th><th>Email</th><th>Status</th></tr></thead>
-                  <tbody>
-                    {(managedAdmins ?? []).map(a => (
-                      <tr key={a.id}>
-                        <td style={{ fontWeight: 500 }}>{a.name}</td>
-                        <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{a.email}</td>
-                        {statusCell(a, "admin")}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {(managedUsers ?? []).length > 0 && (
-              <>
-                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8 }}>Workers</p>
-                <table className="data-table">
-                  <thead><tr><th>Name</th><th>Email</th><th>Status</th></tr></thead>
-                  <tbody>
-                    {(managedUsers ?? []).map(u => (
-                      <tr key={u.id}>
-                        <td style={{ fontWeight: 500 }}>{u.name}</td>
-                        <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{u.email}</td>
-                        {statusCell(u, "user")}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {(managedViewers ?? []).length > 0 && (
-              <>
-                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8, marginTop: 20 }}>Viewers (accountants)</p>
-                <table className="data-table">
-                  <thead><tr><th>Name</th><th>Email</th><th>Status</th></tr></thead>
-                  <tbody>
-                    {(managedViewers ?? []).map(v => (
-                      <tr key={v.id}>
-                        <td style={{ fontWeight: 500 }}>{v.name}</td>
-                        <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{v.email}</td>
-                        {statusCell(v, "viewer")}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {(managedUsers ?? []).length === 0 && (managedAdmins ?? []).length === 0 && (managedViewers ?? []).length === 0 && (
-              <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>No team members yet. Send your first invitation above.</p>
-            )}
-          </>
-        )}
-
         <div className="btn-row" style={{ marginTop: 18 }}>
           {isAdmin && activeTab === "rules" ? (
             <button className="btn-primary" onClick={() => onSaveWorkerRules?.(workerRules)}>
@@ -571,7 +424,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
             <button className="btn-primary" onClick={() => onSave(s)}>
               <i className="ti ti-check" aria-hidden="true" /> Save Company Info
             </button>
-          ) : !isAdmin && activeTab !== "team" ? (
+          ) : !isAdmin ? (
             <button className="btn-primary" onClick={() => onSave(s)}>
               <i className="ti ti-check" aria-hidden="true" /> Save Settings
             </button>

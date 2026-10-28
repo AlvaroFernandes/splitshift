@@ -22,13 +22,19 @@ function LoginForm() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) { setError(error.message); return; }
+    if (error) {
+      // Supabase reports a banned user as "User is banned" — that's someone
+      // their admin removed from the team.
+      setError(/banned/i.test(error.message) ? "Your access to SplitShift has been removed. Contact your admin." : error.message);
+      return;
+    }
     router.push("/");
   };
 
   const bannerMessage =
     urlError === "not_invited"   ? "Access restricted. You need an invitation to use SplitShift." :
     urlError === "invalid_link"  ? "That invite link is invalid or has expired. Please request a new one." :
+    urlError === "removed"       ? "Your access to SplitShift has been removed. Contact your admin." :
     null;
 
   return (

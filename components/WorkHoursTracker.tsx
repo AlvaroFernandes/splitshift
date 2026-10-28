@@ -15,6 +15,7 @@ import { AdminEditModal }    from "./AdminEditModal";
 import { SettingsPage }      from "./SettingsPage";
 import { OnboardingWizard }  from "./OnboardingWizard";
 import { ActivityLog }       from "./ActivityLog";
+import { TeamPage }          from "./TeamPage";
 
 export default function WorkHoursTracker() {
   const {
@@ -36,10 +37,10 @@ export default function WorkHoursTracker() {
     managedUsers,
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
-    processed, weeklyData, totals, chartProcessed, TABS, archivedEntries,
+    processed, weeklyData, totals, chartProcessed, TABS, archivedEntries, isHoursOnly,
     toggleTheme, signOut,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
-    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
+    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite, handleSetRemoved, handleUpdateMember,
     workerSettings, managedAdmins, clients,
     advanceInvoice, closeWeek, addBankAdjustment, removeBankAdjustment, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
@@ -128,6 +129,7 @@ export default function WorkHoursTracker() {
             isAdmin={userRole === "admin"} users={managedUsers}
             periodStart={periodStart} periodEnd={periodEnd}
             bankClosures={bankClosures} bankAdjustments={bankAdjustments} invoiceHistory={invoiceHistory}
+            isHoursOnly={isHoursOnly}
             onNavigate={userRole === "user" ? setTab : undefined} />
         )}
         {tab === "log" && userRole !== "admin" && (
@@ -139,7 +141,7 @@ export default function WorkHoursTracker() {
         {tab === "entries" && (
           <EntriesList processed={processed} archivedProcessed={archivedEntries} onEdit={handleEdit} onDelete={handleDelete}
             isAdmin={userRole === "admin" || userRole === "viewer"} users={managedUsers}
-            isReadOnly={userRole === "viewer"}
+            isReadOnly={userRole === "viewer"} isHoursOnly={isHoursOnly}
             userFilter={adminUserFilter} onUserFilterChange={setAdminUserFilter} />
         )}
         {tab === "weekly" && (
@@ -150,6 +152,7 @@ export default function WorkHoursTracker() {
             invoiceHistoryByWorker={userRole === "admin" ? invoiceHistoryByWorker : undefined}
             bankClosuresByWorker={userRole === "admin" ? bankClosuresByWorker : undefined}
             workerSettings={userRole === "admin" ? workerSettings : undefined}
+            isHoursOnly={isHoursOnly}
             onEdit={handleEdit} onDelete={handleDelete} />
         )}
         {tab === "tfn" && userRole !== "admin" && (
@@ -176,6 +179,13 @@ export default function WorkHoursTracker() {
             onView={setViewingInvoice} pdfNamePattern={settings.pdfNamePattern}
             onDelete={handleDeleteInvoice} onShare={handleShareInvoice} onUpdate={handleUpdateInvoice} />
         )}
+        {tab === "team" && userRole === "admin" && (
+          <TeamPage users={managedUsers} admins={managedAdmins} viewers={managedViewers}
+            workerSettings={workerSettings}
+            onInvite={handleInvite} onResendInvite={handleResendInvite}
+            onUpdateMember={handleUpdateMember} onSaveWorkerRules={handleSaveWorkerRules}
+            onSetRemoved={handleSetRemoved} />
+        )}
         {tab === "activity" && userRole === "admin" && (
           <ActivityLog entries={auditLog} />
         )}
@@ -184,12 +194,8 @@ export default function WorkHoursTracker() {
             settings={settings} onSave={handleSettingsSave}
             isAdmin={userRole === "admin"}
             managedUsers={managedUsers}
-            managedAdmins={managedAdmins}
-            managedViewers={managedViewers}
             workerSettings={workerSettings}
             onSaveWorkerRules={handleSaveWorkerRules}
-            onInvite={handleInvite}
-            onResendInvite={handleResendInvite}
           />
         )}
       </main>
@@ -209,6 +215,7 @@ export default function WorkHoursTracker() {
           userName={managedUsers.find(u => u.id === adminEditEntry.ownerId)?.name ?? "Unknown"}
           onSave={handleAdminSave}
           onClose={handleAdminClose}
+          hideMoney={isHoursOnly(adminEditEntry.ownerId)}
           clients={clients}
         />
       )}

@@ -101,13 +101,15 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                     Week: {weekLabel(ws)}
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="mono" style={{ fontSize: 12 }}>
-                      <span style={{ color: "var(--color-text-success)" }}>{fc(wEarnings)}</span>
-                      <span className="muted" style={{ marginLeft: 6 }}>gross</span>
-                      <span className="muted" style={{ margin: "0 4px" }}>·</span>
-                      <span>{fc(wNet)}</span>
-                      <span className="muted" style={{ marginLeft: 4 }}>net (est.)</span>
-                    </span>
+                    {!isBank && (
+                      <span className="mono" style={{ fontSize: 12 }}>
+                        <span style={{ color: "var(--color-text-success)" }}>{fc(wEarnings)}</span>
+                        <span className="muted" style={{ marginLeft: 6 }}>gross</span>
+                        <span className="muted" style={{ margin: "0 4px" }}>·</span>
+                        <span>{fc(wNet)}</span>
+                        <span className="muted" style={{ marginLeft: 4 }}>net (est.)</span>
+                      </span>
+                    )}
                     {canClose && (
                       <button
                         className="btn-secondary no-print"
@@ -193,14 +195,19 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                 </span>
               </div>
             </div>
-            <div className="card" style={{ padding: "12px 16px" }}>
-              <div className="muted" style={{ fontSize: 12 }}>TFN gross</div>
-              <div className="mono" style={{ fontSize: 20, fontWeight: 500, color: "var(--color-text-success)" }}>{fc(totals.tfnEarnings)}</div>
-            </div>
-            <div className="card" style={{ padding: "12px 16px" }}>
-              <div className="muted" style={{ fontSize: 12 }}>Net pay (est.)</div>
-              <div className="mono" style={{ fontSize: 20, fontWeight: 500 }}>{fc(totalNet)}</div>
-            </div>
+            {/* Hour Bank workers are reported in hours only — no dollar values */}
+            {!isBank && (
+              <>
+                <div className="card" style={{ padding: "12px 16px" }}>
+                  <div className="muted" style={{ fontSize: 12 }}>TFN gross</div>
+                  <div className="mono" style={{ fontSize: 20, fontWeight: 500, color: "var(--color-text-success)" }}>{fc(totals.tfnEarnings)}</div>
+                </div>
+                <div className="card" style={{ padding: "12px 16px" }}>
+                  <div className="muted" style={{ fontSize: 12 }}>Net pay (est.)</div>
+                  <div className="mono" style={{ fontSize: 20, fontWeight: 500 }}>{fc(totalNet)}</div>
+                </div>
+              </>
+            )}
           </div>
           {otHrs > 0 && (
             <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>

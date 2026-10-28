@@ -536,6 +536,15 @@ export function useAppData() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, periodStart, periodEnd, settings, userRole, workerSettings, invoiceHistory, bankClosures, invoiceHistoryByWorker, bankClosuresByWorker]);
 
+  // Hour Bank workers are reported in hours only — every dollar figure is
+  // hidden for them. A worker checks their own mode; admins/viewers check the
+  // mode of the worker who owns the entry.
+  const isHoursOnly = useCallback((ownerId?: string | null): boolean =>
+    userRole === "user"
+      ? settings.excessMode === "bank"
+      : workerSettings[ownerId ?? ""]?.excessMode === "bank",
+  [userRole, settings.excessMode, workerSettings]);
+
   const editEntry = useMemo(
     () => (editId ? (entries.find(e => e.id === editId) ?? null) : null),
     [editId, entries],
@@ -554,6 +563,7 @@ export function useAppData() {
       { id: "entries",   label: "Entries",      icon: "ti-list"             },
       { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
       { id: "bank",      label: "Hour Bank",    icon: "ti-clock-dollar"     },
+      { id: "team",      label: "Team",         icon: "ti-users"            },
       { id: "activity",  label: "Activity",     icon: "ti-activity"         },
     ];
     if (userRole === "viewer") return [
@@ -597,10 +607,10 @@ export function useAppData() {
       const admins = await getManagedAdmins(supabase, userId!);
       setManagedAdmins(withStatuses(admins, statuses));
     } else if (role === "viewer") {
-      const viewers = await supabase.from("profiles").select("user_id, name, email").eq("admin_id", userId!).eq("role", "viewer");
+      const viewers = await supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", userId!).eq("role", "viewer");
       const list: ManagedUser[] = (viewers.data ?? []).map((p: Record<string, unknown>) => ({
         id: p.user_id as string, name: (p.name as string) || (p.email as string) || "Unknown", email: (p.email as string) || "",
-        status: "pending", invitedAt: null,
+        status: "pending", invitedAt: null, removedAt: (p.removed_at as string | null) ?? null,
       }));
       setManagedViewers(withStatuses(list, statuses));
     } else {
@@ -637,6 +647,41 @@ export function useAppData() {
     recordAudit("invite_resent", null, target.id, { email: target.email, role });
     await refreshManagedList(role);
   }, [refreshManagedList]); // supabase/showToast/recordAudit are stable
+
+  // Removes a team member (they lose access; every entry, invoice and bank
+  // record stays) or restores them.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleSetRemoved = useCallback(async (target: ManagedUser, role: "user" | "admin" | "viewer", removed: boolean) => {
+    const res = await fetch("/api/team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: target.id, action: removed ? "remove" : "restore" }),
+    });
+    const json = await res.json();
+    if (!res.ok) { showToast(json.error ?? "Could not update team member", "err"); return; }
+    showToast(removed ? `${target.name} removed — their history is kept` : `${target.name} restored`);
+    recordAudit(removed ? "member_removed" : "member_restored", null, target.id, { email: target.email, role });
+    await refreshManagedList(role);
+  }, [refreshManagedList]); // showToast/recordAudit are stable
+
+  // Updates a team member's name and/or sign-in email. Returns false on failure
+  // so the Team page keeps the edit form open.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleUpdateMember = useCallback(async (target: ManagedUser, role: "user" | "admin" | "viewer", changes: { name: string; email: string }) => {
+    const res = await fetch("/api/team", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: target.id, ...changes }),
+    });
+    const json = await res.json();
+    if (!res.ok) { showToast(json.error ?? "Could not update team member", "err"); return false; }
+    showToast(`${changes.name || changes.email} updated`);
+    recordAudit("member_updated", null, target.id, {
+      fromName: target.name, toName: changes.name, fromEmail: target.email, toEmail: changes.email, role,
+    });
+    await refreshManagedList(role);
+    return true;
+  }, [refreshManagedList]); // showToast/recordAudit are stable
 
   // ── Invoice advance ────────────────────────────────────────────────────────
 
@@ -899,10 +944,11 @@ export function useAppData() {
     adminUserFilter, setAdminUserFilter,
     // derived
     processed, weeklyData, totals, chartProcessed, TABS, archivedEntries,
+    isHoursOnly,
     // handlers
     toggleTheme, signOut,
     handleSave, handleEdit, handleAdminSave, handleAdminClose,
-    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite,
+    handleDelete, handleSettingsSave, handleSaveWorkerRules, handleInvite, handleResendInvite, handleSetRemoved, handleUpdateMember,
     workerSettings, managedAdmins, clients,
     advanceInvoice, closeWeek, addBankAdjustment, removeBankAdjustment, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,

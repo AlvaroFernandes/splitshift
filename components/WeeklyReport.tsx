@@ -139,9 +139,11 @@ interface Props {
   // Each managed worker's current settings — used only as the fallback mode
   // for a worker's weeks with no invoice/closure record yet (still open).
   workerSettings?: Record<string, Settings>;
+  // True when the entry's worker is on Hour Bank — their money is never shown.
+  isHoursOnly?: (ownerId?: string | null) => boolean;
 }
 
-export const WeeklyReport = React.memo(function WeeklyReport({ processed, settings, isAdmin, isReadOnly, users, onEdit, onDelete, invoiceHistory, bankClosures, invoiceHistoryByWorker, bankClosuresByWorker, workerSettings }: Props) {
+export const WeeklyReport = React.memo(function WeeklyReport({ processed, settings, isAdmin, isReadOnly, users, onEdit, onDelete, invoiceHistory, bankClosures, invoiceHistoryByWorker, bankClosuresByWorker, workerSettings, isHoursOnly }: Props) {
   const [expanded,      setExpanded]      = React.useState<Record<string, boolean>>({});
   const [selectedWeek,  setSelectedWeek]  = React.useState<WeekSummary | null>(null);
   const [downloading,   setDownloading]   = React.useState(false);
@@ -198,6 +200,18 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       : processed,
   [processed, isAdmin, workerFilter]);
 
+  // Hour Bank workers are reported in hours only. The money columns go away
+  // when every visible entry is theirs; in a mixed admin view their entries
+  // show "—" and are left out of the money totals.
+  const moneyHidden = React.useCallback(
+    (e: ProcessedEntry) => isHoursOnly?.(e.ownerId) ?? false,
+    [isHoursOnly],
+  );
+  const hideMoney = React.useMemo(
+    () => visible.length > 0 && visible.every(moneyHidden),
+    [visible, moneyHidden],
+  );
+
   const { weeks, grandTotal, entryModes } = React.useMemo(() => {
     const weekMap: Record<string, ProcessedEntry[]> = {};
     visible.forEach(e => {
@@ -221,7 +235,9 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
         modesPresent.add(m);
       });
       const mode: WeekMode = modesPresent.size > 1 ? "mixed" : [...modesPresent][0] ?? fallbackMode;
-      const week = entries.reduce<WeekSummary>((a, e) => ({
+      const week = entries.reduce<WeekSummary>((a, e) => {
+        const m = moneyHidden(e) ? 0 : 1;
+        return {
         weekStart:      ws,
         mode,
         entries,
@@ -233,11 +249,12 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
         abnHours:       a.abnHours       + e.abnPortion,
         bankHours:      a.bankHours      + e.bankHours,
         accumulated:    0,
-        tfnEarnings:    a.tfnEarnings    + e.tfnEarnings,
+        tfnEarnings:    a.tfnEarnings    + e.tfnEarnings * m,
         tfnNetEstimate: 0,
-        abnEarnings:    a.abnEarnings    + e.abnEarnings,
-        total:          a.total          + e.totalEarnings,
-      }), { weekStart: ws, mode, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0 });
+        abnEarnings:    a.abnEarnings    + e.abnEarnings * m,
+        total:          a.total          + e.totalEarnings * m,
+      };
+      }, { weekStart: ws, mode, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0 });
       // Estimated per pay-period, from that week's own TFN gross — not
       // accumulated per-entry, since the effective tax rate depends on the
       // week's total, not each shift in isolation.
@@ -267,7 +284,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
     }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0 });
 
     return { weeks, grandTotal, entryModes };
-  }, [visible, modeForEntry, fallbackMode, byMonth]);
+  }, [visible, modeForEntry, fallbackMode, byMonth, moneyHidden]);
 
   const userMap = React.useMemo(() =>
     new Map((users ?? []).map(u => [u.id, u.name])),
@@ -350,11 +367,11 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               <th>Overtime</th>
               <th>TFN hrs</th>
               <th>Excess hrs</th>
-              <th>TFN earnings</th>
-              <th>TFN net (est.)</th>
-              <th>Excess earnings</th>
+              {!hideMoney && <th>TFN earnings</th>}
+              {!hideMoney && <th>TFN net (est.)</th>}
+              {!hideMoney && <th>Excess earnings</th>}
               <th>Bank balance</th>
-              <th>Total</th>
+              {!hideMoney && <th>Total</th>}
               <th></th>
             </tr>
           </thead>
@@ -378,11 +395,11 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                   <td className="mono">{w.overtime > 0 ? <Bdg type="ot">{fh(w.overtime)}</Bdg> : <span className="muted">—</span>}</td>
                   <td className="mono">{w.tfnHours > 0 ? <Bdg type="tfn">{fh(w.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
                   <td className="mono">{w.abnHours > 0 ? <Bdg type={w.mode}>{fh(w.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
-                  <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>
-                  <td className="mono muted">{w.tfnEarnings > 0 ? fc(w.tfnNetEstimate) : <span className="muted">—</span>}</td>
-                  <td className="mono" style={{ color: "var(--color-text-info)" }}>{w.abnEarnings > 0 ? fc(w.abnEarnings) : <span className="muted">—</span>}</td>
+                  {!hideMoney && <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>}
+                  {!hideMoney && <td className="mono muted">{w.tfnEarnings > 0 ? fc(w.tfnNetEstimate) : <span className="muted">—</span>}</td>}
+                  {!hideMoney && <td className="mono" style={{ color: "var(--color-text-info)" }}>{w.abnEarnings > 0 ? fc(w.abnEarnings) : <span className="muted">—</span>}</td>}
                   <td className="mono" style={{ color: "var(--color-text-bank)" }}>{(w.bankHours > 0 || w.accumulated > 0) ? fh(w.accumulated) : <span className="muted">—</span>}</td>
-                  <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>
+                  {!hideMoney && <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>}
                   <td>
                     <span style={{ display: "flex", gap: 4 }}>
                       {!isAdmin && (
@@ -436,11 +453,11 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                     <td>{e.overtime > 0 ? <Bdg type="ot">{fh(e.overtime)}</Bdg> : <span className="muted">—</span>}</td>
                     <td>{e.tfnPortion > 0 ? <Bdg type="tfn">{fh(e.tfnPortion)}</Bdg> : <span className="muted">—</span>}</td>
                     <td>{e.abnPortion > 0 ? <Bdg type={entryModes.get(e.id) ?? w.mode}>{fh(e.abnPortion)}</Bdg> : <span className="muted">—</span>}</td>
-                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{fc(e.tfnEarnings)}</td>
+                    {!hideMoney && <td className="mono" style={{ fontSize: 12, color: "var(--color-text-success)" }}>{moneyHidden(e) ? <span className="muted">—</span> : fc(e.tfnEarnings)}</td>}
+                    {!hideMoney && <td />}
+                    {!hideMoney && <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{!moneyHidden(e) && e.abnEarnings > 0 ? fc(e.abnEarnings) : <span className="muted">—</span>}</td>}
                     <td />
-                    <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{e.abnEarnings > 0 ? fc(e.abnEarnings) : <span className="muted">—</span>}</td>
-                    <td />
-                    <td className="mono" style={{ fontSize: 12 }}>{fc(e.totalEarnings)}</td>
+                    {!hideMoney && <td className="mono" style={{ fontSize: 12 }}>{moneyHidden(e) ? <span className="muted">—</span> : fc(e.totalEarnings)}</td>}
                     <td>
                       {canEdit && (
                         <span style={{ display: "flex", gap: 4 }}>
@@ -485,11 +502,11 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               <td className="mono">{grandTotal.overtime > 0 ? <Bdg type="ot">{fh(grandTotal.overtime)}</Bdg> : <span className="muted">—</span>}</td>
               <td className="mono">{grandTotal.tfnHours > 0 ? <Bdg type="tfn">{fh(grandTotal.tfnHours)}</Bdg> : <span className="muted">—</span>}</td>
               <td className="mono">{grandTotal.abnHours > 0 ? <Bdg type="abn">{fh(grandTotal.abnHours)}</Bdg> : <span className="muted">—</span>}</td>
-              <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>
-              <td className="mono muted" style={{ fontWeight: 500 }}>{fc(grandTotal.tfnNetEstimate)}</td>
-              <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>
+              {!hideMoney && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>}
+              {!hideMoney && <td className="mono muted" style={{ fontWeight: 500 }}>{fc(grandTotal.tfnNetEstimate)}</td>}
+              {!hideMoney && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>}
               <td className="mono" style={{ fontWeight: 600, color: "var(--color-text-bank)" }}>{grandTotal.bankHours > 0 ? fh(grandTotal.accumulated) : <span className="muted">—</span>}</td>
-              <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>
+              {!hideMoney && <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>}
               <td />
             </tr>
           </tfoot>

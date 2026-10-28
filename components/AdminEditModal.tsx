@@ -3,8 +3,9 @@ import type { Entry, FormState } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
 import { fh, fc } from "@/lib/formatters";
 
-export const AdminEditModal = React.memo(function AdminEditModal({ entry, userName, onSave, onClose, clients }: {
+export const AdminEditModal = React.memo(function AdminEditModal({ entry, userName, onSave, onClose, clients, hideMoney }: {
   entry: Entry;
+  hideMoney?: boolean; // Hour Bank worker — hours only
   userName: string;
   onSave: (updated: Entry) => void;
   onClose: () => void;
@@ -73,10 +74,12 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
             <label>Date</label>
             <input type="date" value={form.date} onChange={e => f("date", e.target.value)} />
           </div>
-          <div className="field">
-            <label>Hourly rate (AUD)</label>
-            <input type="number" min="0" step="0.01" value={form.hourlyRate} onChange={e => f("hourlyRate", e.target.value)} />
-          </div>
+          {!hideMoney && (
+            <div className="field">
+              <label>Hourly rate (AUD)</label>
+              <input type="number" min="0" step="0.01" value={form.hourlyRate} onChange={e => f("hourlyRate", e.target.value)} />
+            </div>
+          )}
           <div className="field">
             <label>Start time</label>
             <input type="time" value={form.startTime} onChange={e => f("startTime", e.target.value)} />
@@ -117,12 +120,14 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
               <span className="muted">Billed: </span>
               <strong className="mono">{fh(previewH)}</strong>
             </span>
-            <span>
-              <span className="muted">Est. earnings: </span>
-              <strong className="mono" style={{ color: "var(--color-text-success)" }}>
-                {fc(previewEarn)}
-              </strong>
-            </span>
+            {!hideMoney && (
+              <span>
+                <span className="muted">Est. earnings: </span>
+                <strong className="mono" style={{ color: "var(--color-text-success)" }}>
+                  {fc(previewEarn)}
+                </strong>
+              </span>
+            )}
             {previewActual < previewRaw && (
               <span className="muted" style={{ fontSize: 12 }}>after {breakMinsNum}m break</span>
             )}

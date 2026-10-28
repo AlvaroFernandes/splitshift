@@ -20,6 +20,7 @@ export interface ManagedUser {
   email: string;
   status: InviteStatus;
   invitedAt: string | null;
+  removedAt?: string | null; // removed from the team — no access, history kept
 }
 
 export type UserRole = "user" | "admin" | "viewer";
