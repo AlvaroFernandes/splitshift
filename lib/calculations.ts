@@ -2,6 +2,16 @@ import type { Entry, ProcessedEntry } from "@/types";
 
 export const MIN_HOURS = 4;
 
+// Annual leave (NES): 4 weeks a year for a 38h week = 152h per 1976h worked,
+// i.e. 1/13 of an hour for every ordinary hour. Only TFN (employee) hours
+// accrue it — not overtime, ABN or Hour Bank excess.
+export const ANNUAL_LEAVE_RATE = 1 / 13;
+export const LEAVE_DAY_HOURS = 7.6;
+
+export function leaveAccrued(e: { rTFN: number }): number {
+  return e.rTFN * ANNUAL_LEAVE_RATE;
+}
+
 export function calcHours(start: string, end: string): number {
   if (!start || !end) return 0;
   const [sh, sm] = start.split(":").map(Number);

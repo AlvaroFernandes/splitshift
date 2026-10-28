@@ -2,7 +2,7 @@ import React from "react";
 import type { ManagedUser, ProcessedEntry, SavedInvoice, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
 import { fh, fc, fd, fdInv, downloadPdf } from "@/lib/formatters";
-import { weekStart, weekEnd } from "@/lib/calculations";
+import { weekStart, weekEnd, leaveAccrued, LEAVE_DAY_HOURS } from "@/lib/calculations";
 import { weekModeMap } from "@/lib/historicalProcessing";
 import { estimateNetForPeriod } from "@/lib/tax";
 import { Bdg } from "./ui";
@@ -37,6 +37,7 @@ interface WeekSummary {
   tfnNetEstimate: number; // estimated take-home TFN pay after income tax + Medicare levy
   abnEarnings: number;
   total: number;
+  leave: number; // annual leave hours accrued in this group (admin view)
 }
 
 function WeekTimesheetDoc({ week, settings }: { week: WeekSummary; settings: Settings }) {
@@ -253,8 +254,9 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
         tfnNetEstimate: 0,
         abnEarnings:    a.abnEarnings    + e.abnEarnings * m,
         total:          a.total          + e.totalEarnings * m,
+        leave:          a.leave          + leaveAccrued(e),
       };
-      }, { weekStart: ws, mode, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0 });
+      }, { weekStart: ws, mode, entries, hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0, leave:0 });
       // Estimated per pay-period, from that week's own TFN gross — not
       // accumulated per-entry, since the effective tax rate depends on the
       // week's total, not each shift in isolation.
@@ -281,7 +283,8 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       tfnNetEstimate: a.tfnNetEstimate + w.tfnNetEstimate,
       abnEarnings:    a.abnEarnings    + w.abnEarnings,
       total:          a.total          + w.total,
-    }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0 });
+      leave:          a.leave          + w.leave,
+    }), { hours:0, breakMinsTotal:0, regular:0, overtime:0, tfnHours:0, abnHours:0, bankHours:0, accumulated:0, tfnEarnings:0, tfnNetEstimate:0, abnEarnings:0, total:0, leave:0 });
 
     return { weeks, grandTotal, entryModes };
   }, [visible, modeForEntry, fallbackMode, byMonth, moneyHidden]);
@@ -289,6 +292,19 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
   const userMap = React.useMemo(() =>
     new Map((users ?? []).map(u => [u.id, u.name])),
   [users]);
+
+  // Annual leave each worker has accrued across the visible entries.
+  const leaveByWorker = React.useMemo(() => {
+    if (!isAdmin) return [];
+    const map = new Map<string, number>();
+    visible.forEach(e => {
+      const h = leaveAccrued(e);
+      if (h > 0) map.set(e.ownerId ?? "", (map.get(e.ownerId ?? "") ?? 0) + h);
+    });
+    return [...map.entries()]
+      .map(([id, hours]) => ({ id, name: userMap.get(id) ?? "—", hours }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [isAdmin, visible, userMap]);
 
   if (weeks.length === 0) {
     return (
@@ -353,6 +369,32 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
         </button>
       </div>
 
+      {leaveByWorker.length > 0 && (
+        <div className="card" style={{ overflowX: "auto", marginBottom: 16 }}>
+          <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>
+            Annual leave accrued <span className="muted">· 1 hour per 13 ordinary TFN hours (4 weeks a year full-time)</span>
+          </p>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Worker</th>
+                <th>Hours</th>
+                <th>Days ({LEAVE_DAY_HOURS}h)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaveByWorker.map(w => (
+                <tr key={w.id}>
+                  <td style={{ fontWeight: 500 }}>{w.name}</td>
+                  <td className="mono">{fh(w.hours)}</td>
+                  <td className="mono muted">{(w.hours / LEAVE_DAY_HOURS).toFixed(1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="card" style={{ overflowX: "auto" }}>
         <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>Summary by {byMonth ? "month" : "week"}</p>
         <table className="data-table">
@@ -371,6 +413,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               {!hideMoney && <th>TFN net (est.)</th>}
               {!hideMoney && <th>Excess earnings</th>}
               <th>Bank balance</th>
+              {isAdmin && <th>Annual leave</th>}
               {!hideMoney && <th>Total</th>}
               <th></th>
             </tr>
@@ -399,6 +442,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                   {!hideMoney && <td className="mono muted">{w.tfnEarnings > 0 ? fc(w.tfnNetEstimate) : <span className="muted">—</span>}</td>}
                   {!hideMoney && <td className="mono" style={{ color: "var(--color-text-info)" }}>{w.abnEarnings > 0 ? fc(w.abnEarnings) : <span className="muted">—</span>}</td>}
                   <td className="mono" style={{ color: "var(--color-text-bank)" }}>{(w.bankHours > 0 || w.accumulated > 0) ? fh(w.accumulated) : <span className="muted">—</span>}</td>
+                  {isAdmin && <td className="mono">{w.leave > 0 ? `+${fh(w.leave)}` : <span className="muted">—</span>}</td>}
                   {!hideMoney && <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>}
                   <td>
                     <span style={{ display: "flex", gap: 4 }}>
@@ -457,6 +501,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                     {!hideMoney && <td />}
                     {!hideMoney && <td className="mono" style={{ fontSize: 12, color: "var(--color-text-info)" }}>{!moneyHidden(e) && e.abnEarnings > 0 ? fc(e.abnEarnings) : <span className="muted">—</span>}</td>}
                     <td />
+                    {isAdmin && <td className="mono muted" style={{ fontSize: 12 }}>{leaveAccrued(e) > 0 ? `+${fh(leaveAccrued(e))}` : "—"}</td>}
                     {!hideMoney && <td className="mono" style={{ fontSize: 12 }}>{moneyHidden(e) ? <span className="muted">—</span> : fc(e.totalEarnings)}</td>}
                     <td>
                       {canEdit && (
@@ -506,6 +551,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               {!hideMoney && <td className="mono muted" style={{ fontWeight: 500 }}>{fc(grandTotal.tfnNetEstimate)}</td>}
               {!hideMoney && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>}
               <td className="mono" style={{ fontWeight: 600, color: "var(--color-text-bank)" }}>{grandTotal.bankHours > 0 ? fh(grandTotal.accumulated) : <span className="muted">—</span>}</td>
+              {isAdmin && <td className="mono" style={{ fontWeight: 600 }}>{grandTotal.leave > 0 ? fh(grandTotal.leave) : <span className="muted">—</span>}</td>}
               {!hideMoney && <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>}
               <td />
             </tr>
