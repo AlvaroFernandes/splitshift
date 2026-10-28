@@ -130,6 +130,8 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
 
   const actions = (u: ManagedUser, role: Role) => {
     const busy = busyId === u.id;
+    // The team owner can't be edited or removed from here.
+    if (u.isOwner) return null;
     if (u.removedAt) {
       return (
         <button type="button" className="btn-secondary" style={smallBtn} disabled={busy} onClick={() => setRemoved(u, role, false)}>
@@ -241,7 +243,10 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
             {rows.map(u => (
               <React.Fragment key={u.id}>
                 <tr style={{ opacity: u.removedAt ? 0.6 : 1 }}>
-                  <td style={{ fontWeight: 500 }}>{u.name}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    {u.name}
+                    {u.isOwner && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--color-text-tertiary)", fontWeight: 400 }}>Owner</span>}
+                  </td>
                   <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{u.email}</td>
                   {role === "user" && <td style={{ fontSize: 12 }}>{ruleSummary(u.id)}</td>}
                   <td>{statusBadge(u)}</td>
@@ -305,7 +310,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
       )}
 
       {section("Workers", users, "user")}
-      {section("Co-admins", admins, "admin")}
+      {section("Admins", admins, "admin")}
       {section("Viewers (accountants)", viewers, "viewer")}
 
       {nothingShown && (

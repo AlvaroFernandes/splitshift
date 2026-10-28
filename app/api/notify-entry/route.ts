@@ -102,19 +102,24 @@ export async function POST(request: NextRequest) {
 
   const workerName = p.name || user.email || "A worker";
 
-  // Resolve root admin and get their email
+  // Resolve the root admin, then notify every active admin on the team
+  // (owner and co-admins) — they all have the same access.
   const admin = createAdminClient();
   const { data: adminProfile } = await admin
-    .from("profiles").select("email, admin_id, role").eq("user_id", p.admin_id).maybeSingle();
-  const ap = adminProfile as { email: string | null; admin_id: string | null; role: string } | null;
+    .from("profiles").select("admin_id, role").eq("user_id", p.admin_id).maybeSingle();
+  const ap = adminProfile as { admin_id: string | null; role: string } | null;
 
   // Walk up one level if admin is a co-admin
-  const rootId   = (ap?.role === "admin" && ap?.admin_id) ? ap.admin_id : p.admin_id;
-  const { data: rootProfile } = await admin
-    .from("profiles").select("email").eq("user_id", rootId).maybeSingle();
-  const adminEmail = (rootProfile as { email: string | null } | null)?.email ?? ap?.email;
+  const rootId = (ap?.role === "admin" && ap?.admin_id) ? ap.admin_id : p.admin_id;
+  const { data: adminRows } = await admin
+    .from("profiles").select("email")
+    .eq("role", "admin")
+    .is("removed_at", null)
+    .or(`user_id.eq.${rootId},admin_id.eq.${rootId}`);
+  const adminEmails = [...new Set(((adminRows ?? []) as { email: string | null }[])
+    .map(r => r.email).filter((e): e is string => !!e))];
 
-  if (!adminEmail) return NextResponse.json({ ok: false });
+  if (adminEmails.length === 0) return NextResponse.json({ ok: false });
 
   const body = await request.json() as {
     date: string; jobDescription: string; client?: string;
@@ -123,7 +128,7 @@ export async function POST(request: NextRequest) {
 
   await resend.emails.send({
     from:    FROM,
-    to:      adminEmail,
+    to:      adminEmails,
     subject: `[SplitShift] ${workerName} logged a new entry`,
     html:    buildHtml(workerName, body),
   });

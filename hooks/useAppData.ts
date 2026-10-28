@@ -41,6 +41,25 @@ async function persistSettings(settings: import("@/types").Settings, periodStart
   return res.ok;
 }
 
+// Company info is shared by every admin on a team — it lives on the team
+// owner's settings row, so it's read and written through /api/company-info.
+const COMPANY_KEYS = ["companyName", "companyAbn", "companyAddress", "companyEmail"] as const;
+type CompanyInfo = Record<(typeof COMPANY_KEYS)[number], string>;
+
+async function fetchCompanyInfo(): Promise<Partial<CompanyInfo>> {
+  const res = await fetch("/api/company-info");
+  return res.ok ? res.json() : {};
+}
+
+async function persistCompanyInfo(s: import("@/types").Settings): Promise<boolean> {
+  const res = await fetch("/api/company-info", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(Object.fromEntries(COMPANY_KEYS.map(k => [k, s[k] ?? ""]))),
+  });
+  return res.ok;
+}
+
 type InviteStatusMap = Record<string, { status: InviteStatus; invitedAt: string | null }>;
 
 async function fetchInviteStatuses(): Promise<InviteStatusMap> {
@@ -53,7 +72,7 @@ async function fetchInviteStatuses(): Promise<InviteStatusMap> {
 function withStatuses(users: ManagedUser[], statuses: InviteStatusMap): ManagedUser[] {
   return users.map(u => statuses[u.id] ? { ...u, status: statuses[u.id].status, invitedAt: statuses[u.id].invitedAt } : u);
 }
-import { ensureProfile, getProfile, getManagedUsers, getManagedAdmins, getManagedTeam } from "@/services/profiles";
+import { ensureProfile, getProfile, getManagedTeam } from "@/services/profiles";
 import { getInvoices, getInvoicesForWorkers, saveInvoice, updateInvoice, deleteInvoice, generateShareToken } from "@/services/invoices";
 import { getBankClosures, getBankClosuresForWorkers, saveBankClosure, type BankClosure } from "@/services/bankClosures";
 import { getBankAdjustments, getBankAdjustmentsForWorkers, saveBankAdjustment, deleteBankAdjustment, type BankAdjustment } from "@/services/bankAdjustments";
@@ -98,6 +117,8 @@ export function useAppData() {
   const entriesRef        = useRef<Entry[]>([]);
   const managedUsersRef   = useRef<ManagedUser[]>([]);
   const userIdRef         = useRef<string | null>(null);
+  // Admins only: the team owner's id — the shared activity log is filed under it.
+  const rootAdminIdRef    = useRef<string | null>(null);
   const toastTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const invoiceHistoryRef = useRef<SavedInvoice[]>([]);
   useEffect(() => { entriesRef.current        = entries;        }, [entries]);
@@ -137,12 +158,14 @@ export function useAppData() {
         setUserRole(role);
 
         if (role === "admin") {
-          const [team, settingsRow, log, entriesRes, statuses] = await Promise.all([
+          rootAdminIdRef.current = adminId ?? user.id;
+          const [team, settingsRow, log, entriesRes, statuses, companyInfo] = await Promise.all([
             getManagedTeam(supabase, user.id),
             fetchSettings(),
             getAuditLog(supabase),
             fetch("/api/admin-entries"),
             fetchInviteStatuses(),
+            fetchCompanyInfo(),
           ]);
           setManagedUsers(withStatuses(team.users, statuses));
           setManagedAdmins(withStatuses(team.admins, statuses));
@@ -162,9 +185,8 @@ export function useAppData() {
           setInvoiceHistoryByWorker(fetchedInvoicesByWorker);
           setBankClosuresByWorker(fetchedClosuresByWorker);
           setBankAdjustmentsByWorker(fetchedAdjustmentsByWorker);
-          if (settingsRow) {
-            setSettings(settingsRow.settings);
-          }
+          // Company fields come from the team owner, so every admin sees the same.
+          setSettings(prev => ({ ...(settingsRow?.settings ?? prev), ...companyInfo }));
         } else if (role === "viewer") {
           if (!adminId) { setLoading(false); return; }
           const [team, settingsRow, entriesRes] = await Promise.all([
@@ -363,9 +385,10 @@ export function useAppData() {
   const recordAudit = useCallback((action: string, targetType: string | null, targetId: string | null, meta: Record<string, unknown>) => {
     const uid = userIdRef.current;
     if (!uid) return;
-    const entry: AuditEntry = { id: genId(), adminId: uid, actorId: uid, action, targetType, targetId, meta, createdAt: new Date().toISOString() };
+    const teamId = rootAdminIdRef.current ?? uid;
+    const entry: AuditEntry = { id: genId(), adminId: teamId, actorId: uid, action, targetType, targetId, meta, createdAt: new Date().toISOString() };
     setAuditLog(prev => [entry, ...prev]);
-    logActivity(supabase, uid, uid, action, targetType, targetId, meta);
+    logActivity(supabase, teamId, uid, action, targetType, targetId, meta);
   }, []); // supabase/setters/refs are stable
 
   const handleAdminSave = useCallback(async (updated: Entry) => {
@@ -395,11 +418,15 @@ export function useAppData() {
     if (entry?.archived) recomputeInvoiceForEntry(remaining, entry.date);
   }, []); // removeEntry/showToast/setters/refs/recordAudit/recomputeInvoiceForEntry are stable
 
-  const handleSettingsSave = useCallback((s: Settings) => {
+  const handleSettingsSave = useCallback(async (s: Settings) => {
     setSettings(s);
     if (userId) saveSettings(s, periodStart, periodEnd);
+    if (userRole === "admin" && !await persistCompanyInfo(s)) {
+      showToast("Could not save company info", "err");
+      return;
+    }
     showToast("Settings saved");
-  }, [userId, periodStart, periodEnd]); // saveSettings/showToast/setSettings are stable
+  }, [userId, userRole, periodStart, periodEnd]); // saveSettings/showToast/setSettings are stable
 
   const handleSaveWorkerRules = useCallback(async (
     rules: { userId: string; tfnLimit: number; tfnRate: string; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[],
@@ -601,22 +628,12 @@ export function useAppData() {
   [entries]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const refreshManagedList = useCallback(async (role: "user" | "admin" | "viewer") => {
-    const statuses = await fetchInviteStatuses();
-    if (role === "admin") {
-      const admins = await getManagedAdmins(supabase, userId!);
-      setManagedAdmins(withStatuses(admins, statuses));
-    } else if (role === "viewer") {
-      const viewers = await supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", userId!).eq("role", "viewer");
-      const list: ManagedUser[] = (viewers.data ?? []).map((p: Record<string, unknown>) => ({
-        id: p.user_id as string, name: (p.name as string) || (p.email as string) || "Unknown", email: (p.email as string) || "",
-        status: "pending", invitedAt: null, removedAt: (p.removed_at as string | null) ?? null,
-      }));
-      setManagedViewers(withStatuses(list, statuses));
-    } else {
-      const users = await getManagedUsers(supabase, userId!);
-      setManagedUsers(withStatuses(users, statuses));
-    }
+  // Reloads the whole team — every admin sees the same workers, admins and viewers.
+  const refreshManagedList = useCallback(async () => {
+    const [team, statuses] = await Promise.all([getManagedTeam(supabase, userId!), fetchInviteStatuses()]);
+    setManagedUsers(withStatuses(team.users, statuses));
+    setManagedAdmins(withStatuses(team.admins, statuses));
+    setManagedViewers(withStatuses(team.viewers, statuses));
   }, [userId]); // supabase/setters are stable
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -630,7 +647,7 @@ export function useAppData() {
     if (!res.ok) { showToast(json.error ?? "Could not send invitation", "err"); return; }
     showToast(`Invitation sent to ${email}`);
     recordAudit("invite_sent", null, null, { email, role });
-    await refreshManagedList(role);
+    await refreshManagedList();
   }, [refreshManagedList]); // supabase/showToast/recordAudit are stable
 
   // Resends an invite email — used for invites that are still pending or have expired.
@@ -645,7 +662,7 @@ export function useAppData() {
     if (!res.ok) { showToast(json.error ?? "Could not resend invitation", "err"); return; }
     showToast(`Invitation resent to ${target.email}`);
     recordAudit("invite_resent", null, target.id, { email: target.email, role });
-    await refreshManagedList(role);
+    await refreshManagedList();
   }, [refreshManagedList]); // supabase/showToast/recordAudit are stable
 
   // Removes a team member (they lose access; every entry, invoice and bank
@@ -661,7 +678,7 @@ export function useAppData() {
     if (!res.ok) { showToast(json.error ?? "Could not update team member", "err"); return; }
     showToast(removed ? `${target.name} removed — their history is kept` : `${target.name} restored`);
     recordAudit(removed ? "member_removed" : "member_restored", null, target.id, { email: target.email, role });
-    await refreshManagedList(role);
+    await refreshManagedList();
   }, [refreshManagedList]); // showToast/recordAudit are stable
 
   // Updates a team member's name and/or sign-in email. Returns false on failure
@@ -679,7 +696,7 @@ export function useAppData() {
     recordAudit("member_updated", null, target.id, {
       fromName: target.name, toName: changes.name, fromEmail: target.email, toEmail: changes.email, role,
     });
-    await refreshManagedList(role);
+    await refreshManagedList();
     return true;
   }, [refreshManagedList]); // showToast/recordAudit are stable
 
@@ -825,7 +842,9 @@ export function useAppData() {
     const s = { ...settings, ...partial, onboardingCompleted: true };
     setSettings(s);
     if (userId) saveSettings(s, periodStart, periodEnd);
-  }, [settings, userId, periodStart, periodEnd]); // saveSettings/setSettings are stable
+    // Admin onboarding collects the team's shared company info.
+    if (userRole === "admin" && COMPANY_KEYS.some(k => k in partial)) persistCompanyInfo(s);
+  }, [settings, userId, userRole, periodStart, periodEnd]); // saveSettings/setSettings are stable
 
   const { showReminder, reminderDaysSince } = useMemo(() => {
     if (userRole === "admin" || userRole === "viewer" || settings.reminderEnabled === false || loading) {
@@ -939,6 +958,7 @@ export function useAppData() {
     bankAdjustmentsByWorker,
     viewingInvoice, setViewingInvoice,
     userRole,
+    userId,
     managedUsers,
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,

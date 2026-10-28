@@ -34,6 +34,7 @@ export default function WorkHoursTracker() {
     bankAdjustmentsByWorker,
     viewingInvoice, setViewingInvoice,
     userRole,
+    userId,
     managedUsers,
     adminEditEntry, setAdminEditEntry,
     adminUserFilter, setAdminUserFilter,
@@ -187,7 +188,8 @@ export default function WorkHoursTracker() {
             onSetRemoved={handleSetRemoved} />
         )}
         {tab === "activity" && userRole === "admin" && (
-          <ActivityLog entries={auditLog} />
+          <ActivityLog entries={auditLog} currentUserId={userId}
+            actorNames={new Map(managedAdmins.map(a => [a.id, a.name]))} />
         )}
         {tab === "settings" && userRole !== "viewer" && (
           <SettingsPage

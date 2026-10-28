@@ -21,6 +21,7 @@ export interface ManagedUser {
   status: InviteStatus;
   invitedAt: string | null;
   removedAt?: string | null; // removed from the team — no access, history kept
+  isOwner?: boolean;          // the team's root admin — can't be removed
 }
 
 export type UserRole = "user" | "admin" | "viewer";

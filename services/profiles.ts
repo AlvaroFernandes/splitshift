@@ -43,38 +43,25 @@ function rowsToUsers(data: unknown[]): ManagedUser[] {
   }));
 }
 
-export async function getManagedUsers(supabase: SupabaseClient, adminId: string): Promise<ManagedUser[]> {
-  const rootAdminId = await resolveRootAdminId(supabase, adminId);
-  const { data } = await supabase
-    .from("profiles").select("user_id, name, email, removed_at")
-    .eq("admin_id", rootAdminId)
-    .eq("role", "user");
-  return rowsToUsers(data ?? []);
-}
-
-export async function getManagedAdmins(supabase: SupabaseClient, adminId: string): Promise<ManagedUser[]> {
-  const rootAdminId = await resolveRootAdminId(supabase, adminId);
-  const { data } = await supabase
-    .from("profiles").select("user_id, name, email, removed_at")
-    .eq("admin_id", rootAdminId)
-    .eq("role", "admin");
-  return rowsToUsers(data ?? []);
-}
-
-// Resolves root admin ID once then fetches workers, co-admins, and viewers in parallel.
+// Resolves root admin ID once then fetches workers, admins, and viewers in parallel.
+// Every admin sees the same team: `admins` is the owner plus all co-admins,
+// minus the caller themselves.
 export async function getManagedTeam(
   supabase: SupabaseClient,
   adminId: string,
 ): Promise<{ users: ManagedUser[]; admins: ManagedUser[]; viewers: ManagedUser[] }> {
   const rootAdminId = await resolveRootAdminId(supabase, adminId);
-  const [usersRes, adminsRes, viewersRes] = await Promise.all([
+  const [usersRes, adminsRes, ownerRes, viewersRes] = await Promise.all([
     supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "user"),
     supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "admin").neq("user_id", rootAdminId),
+    supabase.from("profiles").select("user_id, name, email, removed_at").eq("user_id", rootAdminId),
     supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "viewer"),
   ]);
+  const owner  = rowsToUsers(ownerRes.data ?? []).map(u => ({ ...u, isOwner: true }));
+  const admins = [...owner, ...rowsToUsers(adminsRes.data ?? [])].filter(u => u.id !== adminId);
   return {
     users:   rowsToUsers(usersRes.data   ?? []),
-    admins:  rowsToUsers(adminsRes.data  ?? []),
+    admins,
     viewers: rowsToUsers(viewersRes.data ?? []),
   };
 }

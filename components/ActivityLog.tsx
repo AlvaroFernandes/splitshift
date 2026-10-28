@@ -107,7 +107,13 @@ function ActionIcon({ action, color }: { action: string; color: string }) {
   );
 }
 
-export function ActivityLog({ entries }: { entries: AuditEntry[] }) {
+// The log is shared by every admin on the team; actions by someone other than
+// the viewer are tagged with their name (from `actorNames`).
+export function ActivityLog({ entries, currentUserId, actorNames }: {
+  entries: AuditEntry[];
+  currentUserId?: string | null;
+  actorNames?: Map<string, string>;
+}) {
   if (entries.length === 0) {
     return (
       <div className="empty-state">
@@ -135,6 +141,11 @@ export function ActivityLog({ entries }: { entries: AuditEntry[] }) {
             <ActionIcon action={e.action} color={color} />
             <span style={{ flex: 1, fontSize: 13, color: "var(--color-text-primary)", minWidth: 0 }}>
               {label}
+              {e.actorId !== currentUserId && (
+                <span style={{ marginLeft: 6, color: "var(--color-text-tertiary)" }}>
+                  · by {actorNames?.get(e.actorId) ?? "another admin"}
+                </span>
+              )}
             </span>
             <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", flexShrink: 0, whiteSpace: "nowrap" }}>
               {timeAgo(e.createdAt)}
