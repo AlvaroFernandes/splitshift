@@ -82,7 +82,7 @@ export const BankAdmin = React.memo(function BankAdmin({ users, workerSettings, 
         <i className="ti ti-clock-dollar" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
         <p>No Hour Bank workers</p>
         <p className="muted" style={{ fontSize: 12 }}>
-          Switch a worker&apos;s excess hours to Hour Bank in Settings → Work Rules to track their bank here.
+          Switch a worker&apos;s excess hours to Hour Bank on the Team tab to track their bank here.
         </p>
       </div>
     );

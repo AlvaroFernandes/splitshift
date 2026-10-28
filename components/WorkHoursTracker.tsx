@@ -195,9 +195,6 @@ export default function WorkHoursTracker() {
           <SettingsPage
             settings={settings} onSave={handleSettingsSave}
             isAdmin={userRole === "admin"}
-            managedUsers={managedUsers}
-            workerSettings={workerSettings}
-            onSaveWorkerRules={handleSaveWorkerRules}
           />
         )}
       </main>

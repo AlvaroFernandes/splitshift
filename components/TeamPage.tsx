@@ -13,7 +13,9 @@ export interface WorkerRuleUpdate {
   workerType: "office" | "site";
 }
 
-interface Draft extends Omit<WorkerRuleUpdate, "userId"> {
+type Rules = Omit<WorkerRuleUpdate, "userId">;
+
+interface Draft {
   name: string;
   email: string;
 }
@@ -28,7 +30,9 @@ const selectStyle: React.CSSProperties = {
 
 const smallBtn: React.CSSProperties = { fontSize: 11, padding: "3px 9px" };
 
-// Admin's team: invite people, edit their details (and a worker's work rules),
+const ruleSelectStyle: React.CSSProperties = { ...selectStyle, padding: "4px 8px", fontSize: 12, width: "100%" };
+
+// Admin's team: invite people, set each worker's work rules, edit details,
 // and remove or restore access. Removing never deletes data — the person can
 // no longer sign in, but every entry, invoice and bank record is kept.
 export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, workerSettings, onInvite, onResendInvite, onUpdateMember, onSaveWorkerRules, onSetRemoved }: {
@@ -51,8 +55,11 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
   const [draft,         setDraft]         = useState<Draft | null>(null);
   const [confirmId,     setConfirmId]     = useState<string | null>(null);
   const [busyId,        setBusyId]        = useState<string | null>(null);
+  // Unsaved work-rule changes, per worker — saved together with one button.
+  const [ruleEdits,     setRuleEdits]     = useState<Record<string, Partial<Rules>>>({});
+  const [savingRules,   setSavingRules]   = useState(false);
 
-  const rulesFor = (id: string) => {
+  const savedRules = (id: string): Rules => {
     const ws = workerSettings[id];
     return {
       tfnLimit:          ws?.tfnLimit          ?? 30,
@@ -62,11 +69,32 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
       workerType:       (ws?.workerType        ?? "site") as "office" | "site",
     };
   };
+  const rulesFor = (id: string): Rules => ({ ...savedRules(id), ...ruleEdits[id] });
+  const setRule = <K extends keyof Rules>(id: string, k: K, v: Rules[K]) =>
+    setRuleEdits(prev => ({ ...prev, [id]: { ...prev[id], [k]: v } }));
+
+  const changedRules = Object.keys(ruleEdits)
+    .filter(id => {
+      const before = savedRules(id), after = rulesFor(id);
+      return (Object.keys(after) as (keyof Rules)[]).some(k => after[k] !== before[k]);
+    })
+    .map(id => ({ userId: id, ...rulesFor(id) }));
+
+  const saveRules = async () => {
+    if (changedRules.length === 0 || savingRules) return;
+    setSavingRules(true);
+    try {
+      await onSaveWorkerRules(changedRules);
+      setRuleEdits({});
+    } finally {
+      setSavingRules(false);
+    }
+  };
 
   const startEdit = (u: ManagedUser) => {
     setConfirmId(null);
     setEditingId(u.id);
-    setDraft({ name: u.name, email: u.email, ...rulesFor(u.id) });
+    setDraft({ name: u.name, email: u.email });
   };
   const cancelEdit = () => { setEditingId(null); setDraft(null); };
   const d = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft(prev => prev ? { ...prev, [k]: v } : prev);
@@ -80,16 +108,6 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
     try {
       if (name !== u.name || email !== u.email) {
         if (!await onUpdateMember(u, role, { name, email })) return;
-      }
-      if (role === "user") {
-        const before = rulesFor(u.id);
-        const after  = {
-          tfnLimit: draft.tfnLimit, tfnRate: draft.tfnRate, overtimeThreshold: draft.overtimeThreshold,
-          excessMode: draft.excessMode, workerType: draft.workerType,
-        };
-        if ((Object.keys(after) as (keyof typeof after)[]).some(k => after[k] !== before[k])) {
-          await onSaveWorkerRules([{ userId: u.id, ...after }]);
-        }
       }
       cancelEdit();
     } finally {
@@ -123,13 +141,6 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
     u.status === "accepted"    ? <Bdg type="tfn">Active</Bdg> :
     u.status === "expired"     ? <Bdg type="danger">Invite expired</Bdg> :
                                  <Bdg type="ot">Invite pending</Bdg>;
-
-  const ruleSummary = (id: string) => {
-    const r = rulesFor(id);
-    return r.excessMode === "bank"
-      ? `Hour Bank · ${r.workerType === "office" ? "Office" : "Site"}`
-      : "ABN invoice";
-  };
 
   const actions = (u: ManagedUser, role: Role) => {
     const busy = busyId === u.id;
@@ -184,36 +195,6 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
             <label htmlFor={`t-email-${u.id}`}>Email (used to sign in)</label>
             <input id={`t-email-${u.id}`} type="email" required value={draft.email} onChange={e => d("email", e.target.value)} />
           </div>
-          {role === "user" && (
-            <>
-              <div className="field">
-                <label htmlFor={`t-mode-${u.id}`}>Extra hours go to</label>
-                <select id={`t-mode-${u.id}`} style={selectStyle} value={draft.excessMode} onChange={e => d("excessMode", e.target.value as "abn" | "bank")}>
-                  <option value="abn">ABN Invoice</option>
-                  <option value="bank">Hour Bank</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor={`t-type-${u.id}`}>Worker type</label>
-                <select id={`t-type-${u.id}`} style={selectStyle} value={draft.workerType} disabled={draft.excessMode !== "bank"} onChange={e => d("workerType", e.target.value as "office" | "site")}>
-                  <option value="site">Site (full entry form)</option>
-                  <option value="office">Office (clock in/out only)</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor={`t-limit-${u.id}`}>Weekly TFN limit (hrs)</label>
-                <input id={`t-limit-${u.id}`} type="number" min="0" step="0.5" value={draft.tfnLimit} onChange={e => d("tfnLimit", parseFloat(e.target.value) || 0)} />
-              </div>
-              <div className="field">
-                <label htmlFor={`t-rate-${u.id}`}>TFN hourly rate (AUD)</label>
-                <input id={`t-rate-${u.id}`} type="number" min="0" step="0.01" placeholder="Entry rate" value={draft.tfnRate} onChange={e => d("tfnRate", e.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor={`t-ot-${u.id}`}>Overtime after (hrs / shift)</label>
-                <input id={`t-ot-${u.id}`} type="number" min="1" step="0.5" value={draft.overtimeThreshold} onChange={e => d("overtimeThreshold", parseFloat(e.target.value) || 12)} />
-              </div>
-            </>
-          )}
           <div className="field full" style={{ flexDirection: "row", gap: 8 }}>
             <button type="submit" className="btn-primary" disabled={busyId === u.id}>
               <i className="ti ti-check" aria-hidden="true" /> {busyId === u.id ? "Saving…" : "Save"}
@@ -225,18 +206,85 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
     </tr>
   );
 
+  const ruleCells = (u: ManagedUser) => {
+    const r = rulesFor(u.id);
+    const off = !!u.removedAt;
+    return (
+      <>
+        <td>
+          <input type="number" min="0" step="0.5" value={r.tfnLimit} disabled={off}
+            onChange={e => setRule(u.id, "tfnLimit", parseFloat(e.target.value) || 0)}
+            style={{ width: 70 }} aria-label={`TFN hour limit for ${u.name}`} />
+        </td>
+        <td>
+          <input type="number" min="0" step="0.01" placeholder="Entry rate" value={r.tfnRate} disabled={off}
+            onChange={e => setRule(u.id, "tfnRate", e.target.value)}
+            style={{ width: 90 }} aria-label={`TFN hourly rate for ${u.name}`} />
+        </td>
+        <td>
+          <input type="number" min="1" step="0.5" value={r.overtimeThreshold} disabled={off}
+            onChange={e => setRule(u.id, "overtimeThreshold", parseFloat(e.target.value) || 12)}
+            style={{ width: 70 }} aria-label={`Overtime threshold for ${u.name}`} />
+        </td>
+        <td>
+          <select value={r.excessMode} disabled={off} style={ruleSelectStyle}
+            onChange={e => setRule(u.id, "excessMode", e.target.value as "abn" | "bank")}
+            aria-label={`Excess hours mode for ${u.name}`}>
+            <option value="abn">ABN Invoice</option>
+            <option value="bank">Hour Bank</option>
+          </select>
+        </td>
+        <td>
+          {r.excessMode === "bank" ? (
+            <select value={r.workerType} disabled={off} style={ruleSelectStyle}
+              onChange={e => setRule(u.id, "workerType", e.target.value as "office" | "site")}
+              aria-label={`Worker type for ${u.name}`}>
+              <option value="site">Site</option>
+              <option value="office">Office</option>
+            </select>
+          ) : <span className="muted">—</span>}
+        </td>
+      </>
+    );
+  };
+
   const section = (title: string, list: ManagedUser[], role: Role) => {
     const rows = shown(list);
     if (rows.length === 0) return null;
-    const colSpan = role === "user" ? 5 : 4;
+    const isWorkers = role === "user";
+    const colSpan = isWorkers ? 8 : 4;
     return (
       <div className="card mt-3" style={{ overflowX: "auto" }}>
-        <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8 }}>{title}</p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", margin: 0 }}>{title}</p>
+          {isWorkers && changedRules.length > 0 && (
+            <span style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="btn-secondary" style={smallBtn} disabled={savingRules} onClick={() => setRuleEdits({})}>Discard</button>
+              <button type="button" className="btn-primary" disabled={savingRules} onClick={saveRules}>
+                <i className="ti ti-check" aria-hidden="true" />
+                {savingRules ? "Saving…" : `Save work rules (${changedRules.length})`}
+              </button>
+            </span>
+          )}
+        </div>
+        {isWorkers && (
+          <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 10 }}>
+            Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. Overtime is per shift. Hour Bank workers are either Site (full entry form) or Office (clock in/out only).
+          </p>
+        )}
         <table className="data-table">
           <thead>
             <tr>
-              <th>Name</th><th>Email</th>
-              {role === "user" && <th>Work rules</th>}
+              <th>{isWorkers ? "Worker" : "Name"}</th>
+              {isWorkers ? (
+                <>
+                  <th>TFN limit (hrs/wk)</th>
+                  <th>TFN rate (AUD/hr)</th>
+                  <th>Overtime after (hrs)</th>
+                  <th>Extra hours</th>
+                  <th>Type</th>
+                </>
+              ) : <th>Email</th>}
               <th>Status</th><th></th>
             </tr>
           </thead>
@@ -244,9 +292,18 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
             {rows.map(u => (
               <React.Fragment key={u.id}>
                 <tr style={{ opacity: u.removedAt ? 0.6 : 1 }}>
-                  <td style={{ fontWeight: 500 }}>{u.name}</td>
-                  <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{u.email}</td>
-                  {role === "user" && <td style={{ fontSize: 12 }}>{ruleSummary(u.id)}</td>}
+                  {isWorkers ? (
+                    <td>
+                      <div style={{ fontWeight: 500 }}>{u.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{u.email}</div>
+                    </td>
+                  ) : (
+                    <>
+                      <td style={{ fontWeight: 500 }}>{u.name}</td>
+                      <td style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{u.email}</td>
+                    </>
+                  )}
+                  {isWorkers && ruleCells(u)}
                   <td>{statusBadge(u)}</td>
                   <td>
                     <span style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>

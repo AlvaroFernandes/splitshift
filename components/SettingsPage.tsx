@@ -1,69 +1,31 @@
 import React, { useState, useEffect } from "react";
-import type { EntryTemplate, ManagedUser, Settings } from "@/types";
+import type { EntryTemplate, Settings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/services/settings";
 import { createClient } from "@/lib/supabase";
-
-interface WorkerRule {
-  userId: string;
-  name: string;
-  tfnLimit: number;
-  tfnRate: string;
-  overtimeThreshold: number;
-  excessMode: "abn" | "bank";
-  workerType: "office" | "site";
-}
 
 interface Props {
   settings: Settings;
   onSave: (s: Settings) => void;
   isAdmin?: boolean;
-  managedUsers?: ManagedUser[];
-  workerSettings?: Record<string, Settings>;
-  onSaveWorkerRules?: (rules: { userId: string; tfnLimit: number; tfnRate: string; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[]) => void;
 }
 
-export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin, managedUsers, workerSettings, onSaveWorkerRules }: Props) {
+export const SettingsPage = React.memo(function SettingsPage({ settings, onSave, isAdmin }: Props) {
   const [s, setS] = useState<Settings>({ ...DEFAULT_SETTINGS, ...settings });
-  const [workerRules,    setWorkerRules]    = useState<WorkerRule[]>([]);
   const [newPwd,         setNewPwd]         = useState("");
   const [confirmPwd,     setConfirmPwd]     = useState("");
   const [pwdLoading,     setPwdLoading]     = useState(false);
   const [pwdMsg,         setPwdMsg]         = useState<{ text: string; ok: boolean } | null>(null);
 
   const defaultTab = isAdmin ? "company" : "personal";
-  const [activeTab, setActiveTab] = useState<"personal" | "rules" | "payment" | "company">(defaultTab as "personal" | "rules" | "payment" | "company");
+  const [activeTab, setActiveTab] = useState<"personal" | "payment" | "company">(defaultTab as "personal" | "payment" | "company");
 
   const f = (k: keyof Settings, v: string | number) => setS(prev => ({ ...prev, [k]: v }));
 
   useEffect(() => { setS({ ...DEFAULT_SETTINGS, ...settings }); }, [settings]);
 
-  useEffect(() => {
-    setWorkerRules(prev => {
-      const next = (managedUsers ?? []).map(u => ({
-        userId:            u.id,
-        name:              u.name || u.email,
-        tfnLimit:          workerSettings?.[u.id]?.tfnLimit          ?? 30,
-        tfnRate:           workerSettings?.[u.id]?.tfnRate           ?? "",
-        overtimeThreshold: workerSettings?.[u.id]?.overtimeThreshold ?? 12,
-        excessMode:       (workerSettings?.[u.id]?.excessMode        ?? "abn") as "abn" | "bank",
-        workerType:       (workerSettings?.[u.id]?.workerType        ?? "site") as "office" | "site",
-      }));
-      if (prev.length === next.length &&
-          prev.every((r, i) => r.userId === next[i].userId &&
-                               r.tfnLimit === next[i].tfnLimit &&
-                               r.tfnRate === next[i].tfnRate &&
-                               r.overtimeThreshold === next[i].overtimeThreshold &&
-                               r.excessMode === next[i].excessMode &&
-                               r.workerType === next[i].workerType))
-        return prev;
-      return next;
-    });
-  }, [managedUsers, workerSettings]);
-
   const STABS = [
     ...(isAdmin ? [] : [{ id: "personal" as const, label: "Personal",   icon: "ti-user"        }]),
     ...(isAdmin ? [{ id: "company" as const, label: "Company",    icon: "ti-building"    }] : []),
-    ...(isAdmin ? [{ id: "rules"   as const, label: "Work Rules", icon: "ti-adjustments" }] : []),
     ...(isAdmin ? [] : [{ id: "payment"  as const, label: "Payment",    icon: "ti-credit-card" }]),
   ];
 
@@ -75,25 +37,8 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
     />
   );
 
-  const updateRule = (userId: string, key: "tfnLimit" | "overtimeThreshold", val: number) =>
-    setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, [key]: val } : r));
-
-  const updateRuleRate = (userId: string, val: string) =>
-    setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, tfnRate: val } : r));
-
-  const updateRuleMode = (userId: string, val: "abn" | "bank") =>
-    setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, excessMode: val } : r));
-
-  const updateRuleType = (userId: string, val: "office" | "site") =>
-    setWorkerRules(prev => prev.map(r => r.userId === userId ? { ...r, workerType: val } : r));
-
-  // Work Rules' table needs more room than the narrow forms on the other
-  // tabs (Personal/Company/Payment) — those stay at a comfortable reading
-  // width, while this one gets the space its columns actually need.
-  const wrapperMaxWidth = activeTab === "rules" ? 960 : 600;
-
   return (
-    <div style={{ maxWidth: wrapperMaxWidth, margin: "0 auto" }}>
+    <div style={{ maxWidth: 600, margin: "0 auto" }}>
       <h2 className="sr-only">Settings</h2>
 
       <div className="tabbar no-print" style={{ marginBottom: 16, borderRadius: "var(--border-radius-lg)", border: "0.5px solid var(--color-border-tertiary)" }}>
@@ -285,115 +230,6 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
           </div>
         )}
 
-        {activeTab === "rules" && isAdmin && (
-          <>
-            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 16 }}>
-              Set TFN hour limit, TFN hourly rate and overtime threshold for each worker. Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. These rules are applied independently per worker when calculating their hours and earnings. For Hour Bank workers, choose whether they clock in/out only (Office) or use the full entry form (Site).
-            </p>
-            {workerRules.length === 0 ? (
-              <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>No managed workers found.</p>
-            ) : (
-              <table className="data-table" style={{ marginBottom: 4, tableLayout: "fixed", width: "100%" }}>
-                <colgroup>
-                  <col style={{ width: "20%" }} />
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "15%" }} />
-                  <col style={{ width: "16%" }} />
-                  <col style={{ width: "15%" }} />
-                  <col style={{ width: "20%" }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th>Worker</th>
-                    <th>TFN hour limit</th>
-                    <th style={{ whiteSpace: "normal" }}>TFN rate (AUD/hr)</th>
-                    <th style={{ whiteSpace: "normal" }}>Overtime after (hrs/day)</th>
-                    <th>Excess hours</th>
-                    <th>Worker type</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workerRules.map(r => (
-                    <tr key={r.userId}>
-                      <td style={{ fontWeight: 500 }}>{r.name}</td>
-                      <td>
-                        <input
-                          type="number" min="1" step="1"
-                          value={r.tfnLimit}
-                          onChange={e => updateRule(r.userId, "tfnLimit", parseFloat(e.target.value) || 30)}
-                          style={{ width: 80 }}
-                          aria-label={`TFN limit for ${r.name}`}
-                        />
-                        <span style={{ marginLeft: 6, fontSize: 12, color: "var(--color-text-secondary)" }}>hrs</span>
-                      </td>
-                      <td>
-                        <span style={{ marginRight: 4, fontSize: 12, color: "var(--color-text-secondary)" }}>$</span>
-                        <input
-                          type="number" min="0" step="0.01" placeholder="Entry rate"
-                          value={r.tfnRate}
-                          onChange={e => updateRuleRate(r.userId, e.target.value)}
-                          style={{ width: 90 }}
-                          aria-label={`TFN hourly rate for ${r.name}`}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number" min="1" step="0.5"
-                          value={r.overtimeThreshold}
-                          onChange={e => updateRule(r.userId, "overtimeThreshold", parseFloat(e.target.value) || 12)}
-                          style={{ width: 80 }}
-                          aria-label={`Overtime threshold for ${r.name}`}
-                        />
-                        <span style={{ marginLeft: 6, fontSize: 12, color: "var(--color-text-secondary)" }}>hrs</span>
-                      </td>
-                      <td>
-                        <select
-                          value={r.excessMode}
-                          onChange={e => updateRuleMode(r.userId, e.target.value as "abn" | "bank")}
-                          aria-label={`Excess hours mode for ${r.name}`}
-                          style={{
-                            width: "100%", maxWidth: 160, boxSizing: "border-box",
-                            padding: "4px 8px", fontSize: 12,
-                            border: "0.5px solid var(--color-border-secondary)",
-                            borderRadius: "var(--border-radius-md)",
-                            background: "var(--color-background-secondary)",
-                            color: "var(--color-text-primary)",
-                          }}
-                        >
-                          <option value="abn">ABN Invoice</option>
-                          <option value="bank">Hour Bank</option>
-                        </select>
-                      </td>
-                      <td>
-                        {r.excessMode === "bank" ? (
-                          <select
-                            value={r.workerType}
-                            onChange={e => updateRuleType(r.userId, e.target.value as "office" | "site")}
-                            aria-label={`Worker type for ${r.name}`}
-                            style={{
-                              width: "100%", maxWidth: 180, boxSizing: "border-box",
-                              padding: "4px 8px", fontSize: 12,
-                              border: "0.5px solid var(--color-border-secondary)",
-                              borderRadius: "var(--border-radius-md)",
-                              background: "var(--color-background-secondary)",
-                              color: "var(--color-text-primary)",
-                            }}
-                          >
-                            <option value="office">Office (clock in/out only)</option>
-                            <option value="site">Site (full entry form)</option>
-                          </select>
-                        ) : (
-                          <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
-
         {activeTab === "payment" && (
           <div className="form-grid">
             <div className="field full">
@@ -416,11 +252,7 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
         )}
 
         <div className="btn-row" style={{ marginTop: 18 }}>
-          {isAdmin && activeTab === "rules" ? (
-            <button className="btn-primary" onClick={() => onSaveWorkerRules?.(workerRules)}>
-              <i className="ti ti-check" aria-hidden="true" /> Save Worker Rules
-            </button>
-          ) : isAdmin && activeTab === "company" ? (
+          {isAdmin && activeTab === "company" ? (
             <button className="btn-primary" onClick={() => onSave(s)}>
               <i className="ti ti-check" aria-hidden="true" /> Save Company Info
             </button>
