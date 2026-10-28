@@ -48,7 +48,8 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
   hideMoney?: boolean; // Hour Bank worker — hours only
 }) {
   const isBank   = settings.excessMode === "bank";
-  const tfnLimit = settings.tfnLimit || 30;
+  const tfnLimit = settings.tfnLimit ?? 30;
+  const abnOnly  = !isBank && tfnLimit === 0; // every hour is invoiced
   const today    = todayStr();
 
   // ── This week ───────────────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
     return { ws, byDay, used, extra, hours };
   }, [processed, today]);
 
-  const pct      = Math.min(100, (week.used / tfnLimit) * 100);
+  const pct      = tfnLimit > 0 ? Math.min(100, (week.used / tfnLimit) * 100) : 100;
   const left     = Math.max(0, tfnLimit - week.used);
   const extraDst = isBank ? "your Hour Bank" : "your ABN invoice";
 
@@ -131,6 +132,9 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
             <span className="mono">{fh(week.hours)}</span>
             <span className="ov-big-sub">worked</span>
           </div>
+          {abnOnly ? (
+            <p className="ov-status">All your hours go on your ABN invoice.</p>
+          ) : <>
           <div className="ov-progress" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}
             aria-label="TFN limit used this week">
             <div className={`ov-progress-fill${pct >= 100 ? " full" : ""}`} style={{ width: `${pct}%` }} />
@@ -144,6 +148,7 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
               ? <>Limit reached — <b>{fh(week.extra)}</b> going to {extraDst} this week.</>
               : <><b>{fh(left)}</b> left before extra hours go to {extraDst}.</>}
           </p>
+          </>}
           <div className="week-strip">
             {week.byDay.map((d, i) => (
               <div key={d.date} className={`day-cell${d.date === today ? " today" : ""}${d.hours > 0 ? " worked" : ""}`}>
@@ -229,10 +234,12 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
             <p className="ov-meta">Set by your admin</p>
           </div>
           <dl className="ov-list">
-            <div><dt>Weekly TFN limit</dt><dd className="mono">{fh(tfnLimit)}</dd></div>
-            {!hideMoney && <div><dt>TFN rate</dt><dd className="mono">{isNaN(tfnRate) ? "Entry rate" : `${fc(tfnRate)}/h`}</dd></div>}
+            {abnOnly
+              ? <div><dt>Arrangement</dt><dd>ABN only</dd></div>
+              : <div><dt>Weekly TFN limit</dt><dd className="mono">{fh(tfnLimit)}</dd></div>}
+            {!hideMoney && !abnOnly && <div><dt>TFN rate</dt><dd className="mono">{isNaN(tfnRate) ? "Entry rate" : `${fc(tfnRate)}/h`}</dd></div>}
             <div><dt>Overtime after</dt><dd className="mono">{fh(settings.overtimeThreshold || 12)} / shift</dd></div>
-            <div><dt>Extra hours go to</dt><dd>{isBank ? "Hour Bank" : "ABN invoice"}</dd></div>
+            {!abnOnly && <div><dt>Extra hours go to</dt><dd>{isBank ? "Hour Bank" : "ABN invoice"}</dd></div>}
             {isBank && <div><dt>Worker type</dt><dd>{settings.workerType === "office" ? "Office" : "Site"}</dd></div>}
           </dl>
         </section>

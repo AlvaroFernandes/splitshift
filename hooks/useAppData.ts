@@ -297,7 +297,7 @@ export function useAppData() {
       e.archived && e.date >= inv.data.periodStart && e.date <= inv.data.periodEnd,
     );
     const tfnRateParsed = parseFloat(s.tfnRate || "") || undefined;
-    const processedWeek = processEntries(weekEntries, s.tfnLimit || 30, tfnRateParsed, s.overtimeThreshold || 12, "abn");
+    const processedWeek = processEntries(weekEntries, s.tfnLimit ?? 30, tfnRateParsed, s.overtimeThreshold || 12, "abn");
 
     const entryRows = buildEntryRows(processedWeek);
     const manualRows = inv.data.rows.filter(r => !r.entryId);
@@ -503,7 +503,7 @@ export function useAppData() {
         const ws  = workerSettings[uid] ?? DEFAULT_SETTINGS;
         const tfnRateParsed = parseFloat(ws.tfnRate || "") || undefined;
         const ot  = ws.overtimeThreshold || 12;
-        const lim = ws.tfnLimit || 30;
+        const lim = ws.tfnLimit ?? 30;
         const em = ws.excessMode ?? "abn";
         procParts.push(...processEntries(periodEntries.filter(e => e.ownerId === uid), lim, tfnRateParsed, ot, em));
         // Archived entries may belong to a week closed under different settings
@@ -610,7 +610,10 @@ export function useAppData() {
       { id: "log",       label: "Log Entry",    icon: "ti-clock-plus"       },
       { id: "entries",   label: "Entries",      icon: "ti-list"             },
       { id: "weekly",    label: "Weekly Report", icon: "ti-calendar-week"   },
-      { id: "tfn",       label: "TFN Report",   icon: "ti-report"           },
+      // ABN-only workers (TFN limit 0) have no salary hours to report.
+      ...(settings.tfnLimit !== 0 ? [
+        { id: "tfn",     label: "TFN Report",   icon: "ti-report"           },
+      ] : []),
       ...(!isBank ? [
         { id: "abn",     label: "ABN Invoice",  icon: "ti-receipt"          },
       ] : []),
@@ -621,7 +624,7 @@ export function useAppData() {
         { id: "history", label: "Invoices",     icon: "ti-history"          },
       ] : []),
     ];
-  }, [userRole, settings.excessMode, bankClosures, bankAdjustments.length, invoiceHistory.length]);
+  }, [userRole, settings.excessMode, settings.tfnLimit, bankClosures, bankAdjustments.length, invoiceHistory.length]);
 
   const clients = useMemo(() =>
     [...new Set(entries.map(e => e.client).filter(Boolean))].sort() as string[],

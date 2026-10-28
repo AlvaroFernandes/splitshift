@@ -11,7 +11,7 @@ interface Regime {
 
 function currentRegime(settings: Settings): Regime {
   return {
-    tfnLimit: settings.tfnLimit || 30,
+    tfnLimit: settings.tfnLimit ?? 30,
     tfnRate: parseFloat(settings.tfnRate || "") || undefined,
     overtimeThreshold: settings.overtimeThreshold || 12,
     excessMode: settings.excessMode ?? "abn",
@@ -50,7 +50,7 @@ export function processEntriesWithHistory(
   for (const inv of invoices) {
     const s = inv.data.settings;
     const regime: Regime = {
-      tfnLimit: s.tfnLimit || 30,
+      tfnLimit: s.tfnLimit ?? 30,
       tfnRate: parseFloat(s.tfnRate || "") || undefined,
       overtimeThreshold: s.overtimeThreshold || 12,
       excessMode: "abn",

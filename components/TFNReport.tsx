@@ -24,7 +24,7 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
   const hasClients = tfnEntries.some(e => e.client);
   // Overtime counts 1.5× towards the weekly TFN limit, so the hours actually
   // worked can come in under the limit even when it is fully used.
-  const tfnLimit   = settings.tfnLimit || 30;
+  const tfnLimit   = settings.tfnLimit ?? 30;
 
   // Group TFN entries by Mon–Sun week
   const weekMap = new Map<string, ProcessedEntry[]>();

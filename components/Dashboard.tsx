@@ -218,7 +218,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
       </p>
       <div className="metric-grid">
         <Metric label="Total hours"  value={fh(totals.hours)}    sub={`${processed.length} entries`}    />
-        <Metric label="TFN hours"    value={fh(totals.tfnHours)} sub={`${settings.tfnLimit}h weekly limit`} color="success" />
+        {settings.tfnLimit !== 0 && <Metric label="TFN hours"    value={fh(totals.tfnHours)} sub={`${settings.tfnLimit}h weekly limit`} color="success" />}
         {settings.excessMode === "bank"
           ? <Metric label="Hour bank"  value={fh(totals.bankHours)} sub="accrued, not invoiced" color="info" />
           : <Metric label="ABN hours"  value={fh(totals.abnHours)}  sub="invoiceable excess"    color="info" />

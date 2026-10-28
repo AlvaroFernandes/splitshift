@@ -102,7 +102,9 @@ export const ABNInvoice = React.memo(function ABNInvoice({ processed, settings, 
           <i className="ti ti-circle-check" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-success)" }} />
           <p>No ABN hours to invoice</p>
           <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-            All hours are within the {settings.tfnLimit}h weekly TFN limit
+            {settings.tfnLimit === 0
+              ? "Log some hours to invoice them"
+              : `All hours are within the ${settings.tfnLimit}h weekly TFN limit`}
           </p>
         </div>
       ) : (

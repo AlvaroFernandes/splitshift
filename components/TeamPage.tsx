@@ -206,18 +206,34 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
     </tr>
   );
 
+  // "ABN only" isn't stored separately: it's ABN mode with a TFN limit of 0,
+  // so every hour goes on the invoice.
+  type Arrangement = "abn" | "bank" | "abnOnly";
+  const arrangementOf = (r: Rules): Arrangement =>
+    r.excessMode === "abn" && r.tfnLimit === 0 ? "abnOnly" : r.excessMode;
+  const setArrangement = (id: string, a: Arrangement) => {
+    const r = rulesFor(id);
+    const tfnLimit = a === "abnOnly" ? 0 : r.tfnLimit === 0 ? savedLimitOr30(id) : r.tfnLimit;
+    setRuleEdits(prev => ({
+      ...prev,
+      [id]: { ...prev[id], excessMode: a === "bank" ? "bank" : "abn", tfnLimit, ...(a === "abnOnly" ? { tfnRate: "" } : {}) },
+    }));
+  };
+  const savedLimitOr30 = (id: string) => savedRules(id).tfnLimit || 30;
+
   const ruleCells = (u: ManagedUser) => {
     const r = rulesFor(u.id);
     const off = !!u.removedAt;
+    const abnOnly = arrangementOf(r) === "abnOnly";
     return (
       <>
         <td>
-          <input type="number" min="0" step="0.5" value={r.tfnLimit} disabled={off}
+          <input type="number" min="0" step="0.5" value={r.tfnLimit} disabled={off || abnOnly}
             onChange={e => setRule(u.id, "tfnLimit", parseFloat(e.target.value) || 0)}
             style={{ width: 70 }} aria-label={`TFN hour limit for ${u.name}`} />
         </td>
         <td>
-          <input type="number" min="0" step="0.01" placeholder="Entry rate" value={r.tfnRate} disabled={off}
+          <input type="number" min="0" step="0.01" placeholder={abnOnly ? "—" : "Entry rate"} value={r.tfnRate} disabled={off || abnOnly}
             onChange={e => setRule(u.id, "tfnRate", e.target.value)}
             style={{ width: 90 }} aria-label={`TFN hourly rate for ${u.name}`} />
         </td>
@@ -227,11 +243,12 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
             style={{ width: 70 }} aria-label={`Overtime threshold for ${u.name}`} />
         </td>
         <td>
-          <select value={r.excessMode} disabled={off} style={ruleSelectStyle}
-            onChange={e => setRule(u.id, "excessMode", e.target.value as "abn" | "bank")}
+          <select value={arrangementOf(r)} disabled={off} style={ruleSelectStyle}
+            onChange={e => setArrangement(u.id, e.target.value as Arrangement)}
             aria-label={`Excess hours mode for ${u.name}`}>
             <option value="abn">ABN Invoice</option>
             <option value="bank">Hour Bank</option>
+            <option value="abnOnly">ABN only (no TFN)</option>
           </select>
         </td>
         <td>
@@ -269,7 +286,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
         </div>
         {isWorkers && (
           <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 10 }}>
-            Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. Overtime is per shift. Hour Bank workers are either Site (full entry form) or Office (clock in/out only).
+            Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. Overtime is per shift. Hour Bank workers are either Site (full entry form) or Office (clock in/out only). ABN only workers invoice every hour (TFN limit 0).
           </p>
         )}
         <table className="data-table">
