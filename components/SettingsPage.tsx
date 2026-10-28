@@ -129,6 +129,9 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                 />
                 <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>days</span>
               </div>
+              <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
+                Shown in the app and sent by email (then once a week while you still haven&apos;t logged).
+              </span>
             </div>
             <div className="field full" style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 16, marginTop: 4 }}>
               <label>Saved templates</label>
