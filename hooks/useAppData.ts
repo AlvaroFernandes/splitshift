@@ -7,7 +7,7 @@ import type {
   AuditEntry, Entry, EntryTemplate, InviteStatus, ManagedUser, ProcessedEntry, Settings, Totals,
   FormState, Toast, InvLineRow, SavedInvoice, UserRole,
 } from "@/types";
-import { calcHours, processEntries, weekStart, weekEnd } from "@/lib/calculations";
+import { calcHours, processEntries, weekStart, weekEnd, limitPeriodOf } from "@/lib/calculations";
 import { processEntriesWithHistory } from "@/lib/historicalProcessing";
 import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, upsertEntry, deleteEntry, archiveEntries, unarchiveEntries } from "@/services/entries";
@@ -429,7 +429,7 @@ export function useAppData() {
   }, [userId, userRole, periodStart, periodEnd]); // saveSettings/showToast/setSettings are stable
 
   const handleSaveWorkerRules = useCallback(async (
-    rules: { userId: string; tfnLimit: number; tfnRate: string; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[],
+    rules: { userId: string; tfnLimit: number; limitPeriod: "week" | "month"; tfnRate: string; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[],
   ) => {
     // Detect ABN <-> Hour Bank switches before overwriting, so they can be
     // logged individually — a generic "rules saved" entry doesn't tell an
@@ -439,7 +439,7 @@ export function useAppData() {
     // what the worker earns.
     const rateChanges: { workerId: string; workerName: string; from: string; to: string }[] = [];
     const results = await Promise.all(
-      rules.map(({ userId: wid, tfnLimit, tfnRate: rawRate, overtimeThreshold, excessMode, workerType }) => {
+      rules.map(({ userId: wid, tfnLimit, limitPeriod, tfnRate: rawRate, overtimeThreshold, excessMode, workerType }) => {
         const existing     = workerSettings[wid] ?? DEFAULT_SETTINGS;
         const previousMode = existing.excessMode ?? "abn";
         const workerName   = managedUsersRef.current.find(u => u.id === wid)?.name ?? "worker";
@@ -454,7 +454,7 @@ export function useAppData() {
             fromTfnLimit: existing.tfnLimit ?? 30, toTfnLimit: tfnLimit,
           });
         }
-        const updated = { ...existing, tfnLimit, tfnRate, overtimeThreshold, excessMode, workerType };
+        const updated = { ...existing, tfnLimit, limitPeriod, tfnRate, overtimeThreshold, excessMode, workerType };
         setWorkerSettings(prev => ({ ...prev, [wid]: updated }));
         return saveWorkerSettingsSvc(supabase, wid, updated);
       })
@@ -505,26 +505,35 @@ export function useAppData() {
         const ot  = ws.overtimeThreshold || 12;
         const lim = ws.tfnLimit ?? 30;
         const em = ws.excessMode ?? "abn";
-        procParts.push(...processEntries(periodEntries.filter(e => e.ownerId === uid), lim, tfnRateParsed, ot, em));
         // Archived entries may belong to a week closed under different settings
         // (a different rate/limit/mode) than the worker's current ones — use
         // each week's own frozen regime, just like the worker's own view does.
-        allProcParts.push(...processEntriesWithHistory(
+        const allPart = processEntriesWithHistory(
           allPeriodEntries.filter(e => e.ownerId === uid), ws,
           invoiceHistoryByWorker[uid] ?? [], bankClosuresByWorker[uid] ?? [],
-        ));
+        );
+        allProcParts.push(...allPart);
+        // A monthly budget is shared with the month's already-closed weeks,
+        // so open entries can't be processed on their own.
+        procParts.push(...(limitPeriodOf(ws) === "month"
+          ? allPart.filter(e => !e.archived)
+          : processEntries(periodEntries.filter(e => e.ownerId === uid), lim, tfnRateParsed, ot, em)));
       }
       processed   = procParts;
       allProcessed = allProcParts;
     } else {
       const tfnRateParsed = parseFloat(settings.tfnRate || "") || undefined;
       const em = settings.excessMode ?? "abn";
-      processed = processEntries(periodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, em);
       // Archived entries may belong to a week closed under different settings
       // (a different rate/limit/mode) than the worker's current ones — use
       // each week's own frozen regime instead of blindly reprocessing under
       // today's settings, which would rewrite history after any change.
       allProcessed = processEntriesWithHistory(allPeriodEntries, settings, invoiceHistory, bankClosures);
+      // A monthly budget is shared with the month's already-closed weeks,
+      // so open entries can't be processed on their own.
+      processed = limitPeriodOf(settings) === "month"
+        ? allProcessed.filter(e => !e.archived)
+        : processEntries(periodEntries, settings.tfnLimit, tfnRateParsed, settings.overtimeThreshold || 12, em);
     }
 
     // Earnings chart: all entries across all time (no period filter, including archived)
@@ -796,13 +805,14 @@ export function useAppData() {
         mode: isBank ? "bank" : "abn",
         tfnLimit: settings.tfnLimit, tfnRate: parseFloat(settings.tfnRate || "") || undefined,
         overtimeThreshold: settings.overtimeThreshold || 12,
+        limitPeriod: limitPeriodOf(settings),
       });
       if (closure) setBankClosures(prev => [closure, ...prev.filter(c => c.weekStart !== ws)]);
     }
     setEntries(prev => prev.map(e => toCloseIds.includes(e.id) ? { ...e, archived: true } : e));
     showToast(isBank ? "Week closed — hours banked" : "Week closed — no invoice needed");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyData, userId, settings.excessMode, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold]); // supabase/showToast/setters stable
+  }, [weeklyData, userId, settings.excessMode, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, settings.limitPeriod]); // supabase/showToast/setters stable
 
   // Admin records a change to a worker's Hour Bank balance — usually that
   // `hours` banked hours were paid out (negative), or a correction (positive).

@@ -79,6 +79,9 @@ export interface Settings {
   accountNumber: string;
   invoiceNotes: string;
   tfnLimit: number;
+  // Period the TFN limit covers. "month" (calendar month) is only used for
+  // Hour Bank workers — see limitPeriodOf().
+  limitPeriod?: "week" | "month";
   overtimeThreshold: number;
   excessMode?: "abn" | "bank";
   workerType?: "office" | "site";

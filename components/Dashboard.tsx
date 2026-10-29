@@ -3,6 +3,7 @@ import type { ManagedUser, ProcessedEntry, SavedInvoice, Settings, Totals } from
 import type { BankClosure } from "@/services/bankClosures";
 import type { BankAdjustment } from "@/services/bankAdjustments";
 import { fh, fc, fd } from "@/lib/formatters";
+import { limitPeriodOf } from "@/lib/calculations";
 import { Metric, Bdg } from "./ui";
 import { EarningsChart } from "./EarningsChart";
 import { WorkerOverview } from "./WorkerOverview";
@@ -218,7 +219,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
       </p>
       <div className="metric-grid">
         <Metric label="Total hours"  value={fh(totals.hours)}    sub={`${processed.length} entries`}    />
-        {settings.tfnLimit !== 0 && <Metric label="TFN hours"    value={fh(totals.tfnHours)} sub={`${settings.tfnLimit}h weekly limit`} color="success" />}
+        {settings.tfnLimit !== 0 && <Metric label="TFN hours"    value={fh(totals.tfnHours)} sub={`${settings.tfnLimit}h ${limitPeriodOf(settings) === "month" ? "monthly" : "weekly"} limit`} color="success" />}
         {settings.excessMode === "bank"
           ? <Metric label="Hour bank"  value={fh(totals.bankHours)} sub="accrued, not invoiced" color="info" />
           : <Metric label="ABN hours"  value={fh(totals.abnHours)}  sub="invoiceable excess"    color="info" />

@@ -3,7 +3,7 @@ import type { ProcessedEntry, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
 import type { BankAdjustment } from "@/services/bankAdjustments";
 import { fh, fd, todayStr } from "@/lib/formatters";
-import { weekStart, weekEnd } from "@/lib/calculations";
+import { weekStart, weekEnd, limitPeriodOf } from "@/lib/calculations";
 import { Metric, Bdg } from "./ui";
 
 function weekLabel(monStr: string): string {
@@ -139,13 +139,13 @@ export const HourBank = React.memo(function HourBank({ bankClosures: allClosures
           <i className="ti ti-clock-dollar" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
           <p>No hours banked yet</p>
           <p className="muted" style={{ fontSize: 12 }}>
-            Hours above your {fh(settings.tfnLimit)} weekly limit are added to your bank.
+            Hours above your {fh(settings.tfnLimit)} {limitPeriodOf(settings) === "month" ? "monthly" : "weekly"} limit are added to your bank.
           </p>
         </div>
       ) : (
         <div className="card mt-3" style={{ overflowX: "auto" }}>
           <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>
-            Statement — balance carries forward. Hours above your {fh(settings.tfnLimit)} weekly limit are banked.
+            Statement — balance carries forward. Hours above your {fh(settings.tfnLimit)} {limitPeriodOf(settings) === "month" ? "monthly" : "weekly"} limit are banked.
           </p>
           <table className="data-table">
             <thead>

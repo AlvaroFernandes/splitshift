@@ -16,6 +16,7 @@ export interface BankClosure {
   tfnLimit?: number;
   tfnRate?: number;
   overtimeThreshold?: number;
+  limitPeriod?: "week" | "month"; // undefined → weekly (closed before monthly limits existed)
 }
 
 function fromRow(row: Record<string, unknown>): BankClosure {
@@ -30,6 +31,7 @@ function fromRow(row: Record<string, unknown>): BankClosure {
     tfnLimit:          row.tfn_limit          != null ? Number(row.tfn_limit)          : undefined,
     tfnRate:           row.tfn_rate           != null ? Number(row.tfn_rate)           : undefined,
     overtimeThreshold: row.overtime_threshold != null ? Number(row.overtime_threshold) : undefined,
+    limitPeriod:       row.limit_period === "month" ? "month" : row.limit_period === "week" ? "week" : undefined,
   };
 }
 
@@ -66,6 +68,7 @@ export async function saveBankClosure(
   params: {
     userId: string; weekStart: string; weekEnd: string; hours: number;
     mode: "abn" | "bank"; tfnLimit: number; tfnRate?: number; overtimeThreshold: number;
+    limitPeriod: "week" | "month";
   },
 ): Promise<BankClosure | null> {
   const { data, error } = await supabase.from("bank_closures").upsert({
@@ -77,6 +80,7 @@ export async function saveBankClosure(
     tfn_limit:          params.tfnLimit,
     tfn_rate:           params.tfnRate ?? null,
     overtime_threshold: params.overtimeThreshold,
+    limit_period:       params.limitPeriod,
   }, { onConflict: "user_id,week_start" }).select().single();
   if (error || !data) return null;
   return fromRow(data as Record<string, unknown>);

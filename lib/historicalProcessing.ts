@@ -1,12 +1,13 @@
 import type { Entry, ProcessedEntry, SavedInvoice, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
-import { processEntries, weekStart } from "./calculations";
+import { processEntries, weekStart, budgetPeriod, limitPeriodOf, type LimitPeriod } from "./calculations";
 
 interface Regime {
   tfnLimit: number;
   tfnRate?: number;
   overtimeThreshold: number;
   excessMode: "abn" | "bank";
+  limitPeriod: LimitPeriod;
 }
 
 function currentRegime(settings: Settings): Regime {
@@ -15,6 +16,7 @@ function currentRegime(settings: Settings): Regime {
     tfnRate: parseFloat(settings.tfnRate || "") || undefined,
     overtimeThreshold: settings.overtimeThreshold || 12,
     excessMode: settings.excessMode ?? "abn",
+    limitPeriod: limitPeriodOf(settings),
   };
 }
 
@@ -54,6 +56,7 @@ export function processEntriesWithHistory(
       tfnRate: parseFloat(s.tfnRate || "") || undefined,
       overtimeThreshold: s.overtimeThreshold || 12,
       excessMode: "abn",
+      limitPeriod: "week",
     };
     for (const ws of weeksBetween(inv.data.periodStart, inv.data.periodEnd)) {
       regimeByWeek.set(ws, regime);
@@ -66,24 +69,28 @@ export function processEntriesWithHistory(
       tfnRate: c.tfnRate ?? (parseFloat(settings.tfnRate || "") || undefined),
       overtimeThreshold: c.overtimeThreshold ?? (settings.overtimeThreshold || 12),
       excessMode: c.mode,
+      limitPeriod: limitPeriodOf({ excessMode: c.mode, limitPeriod: c.limitPeriod }),
     });
   }
 
   const live = currentRegime(settings);
-  const byWeek = new Map<string, Entry[]>();
+
+  // Group entries by their week's regime and by the TFN budget period that
+  // regime uses (a week, or a calendar month), then process each group on
+  // its own. processEntries resets the budget per period internally, so this
+  // matches processing everything under a single regime. A monthly budget
+  // spans every week of the month that shares the same regime.
+  const groups = new Map<string, { r: Regime; entries: Entry[] }>();
   for (const e of entries) {
-    const ws = weekStart(e.date);
-    if (!byWeek.has(ws)) byWeek.set(ws, []);
-    byWeek.get(ws)!.push(e);
+    const r = regimeByWeek.get(weekStart(e.date)) ?? live;
+    const key = `${JSON.stringify(r)}|${budgetPeriod(e.date, r.limitPeriod)}`;
+    if (!groups.has(key)) groups.set(key, { r, entries: [] });
+    groups.get(key)!.entries.push(e);
   }
 
-  // processEntries' weekly TFN budget resets every Monday internally, so
-  // processing one week at a time (each under its own regime) is equivalent
-  // to processing the whole list under a single regime.
   const result: ProcessedEntry[] = [];
-  for (const [ws, weekEntries] of byWeek) {
-    const r = regimeByWeek.get(ws) ?? live;
-    result.push(...processEntries(weekEntries, r.tfnLimit, r.tfnRate, r.overtimeThreshold, r.excessMode));
+  for (const { r, entries: groupEntries } of groups.values()) {
+    result.push(...processEntries(groupEntries, r.tfnLimit, r.tfnRate, r.overtimeThreshold, r.excessMode, r.limitPeriod));
   }
   return result;
 }

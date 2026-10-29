@@ -29,6 +29,20 @@ export function weekStart(dateStr: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+export type LimitPeriod = "week" | "month";
+
+// The period a worker's TFN limit covers. Monthly limits apply to Hour Bank
+// workers only: ABN invoices are raised per week, so their budget must reset
+// weekly too.
+export function limitPeriodOf(s: { excessMode?: "abn" | "bank"; limitPeriod?: LimitPeriod }): LimitPeriod {
+  return s.excessMode === "bank" && s.limitPeriod === "month" ? "month" : "week";
+}
+
+// Key of the TFN budget period a date falls in: its Monday, or its YYYY-MM.
+export function budgetPeriod(dateStr: string, period: LimitPeriod): string {
+  return period === "month" ? dateStr.slice(0, 7) : weekStart(dateStr);
+}
+
 // Sunday closing a week that started on `weekStartStr` (Monday)
 export function weekEnd(weekStartStr: string): string {
   const d = new Date(weekStartStr + "T12:00:00");
@@ -42,7 +56,8 @@ export function weekEnd(weekStartStr: string): string {
  * Two independent splits per entry:
  *   OVERTIME – hours beyond `overtimeThreshold` in a single entry
  *   TFN/ABN  – first `tfnLimit` weighted hours per Mon–Sun week → TFN salary;
- *              excess → ABN invoice. The TFN counter resets every Monday.
+ *              excess → ABN invoice. The TFN counter resets every Monday —
+ *              or on the 1st of each month when `limitPeriod` is "month".
  *
  * TFN salary model (when tfnRate is set):
  *   - TFN pay for a week is always tfnLimit × tfnRate (fixed salary).
@@ -61,6 +76,7 @@ export function processEntries(
   tfnRate?: number,
   overtimeThreshold = 12,
   excessMode: "abn" | "bank" = "abn",
+  limitPeriod: LimitPeriod = "week",
 ): ProcessedEntry[] {
   const sorted = [...entries].sort((a, b) => {
     const d = a.date.localeCompare(b.date);
@@ -72,7 +88,7 @@ export function processEntries(
   let currentWeek = "";
 
   const processed = sorted.map(entry => {
-    const ew = weekStart(entry.date);
+    const ew = budgetPeriod(entry.date, limitPeriod);
     if (ew !== currentWeek) { weekRun = 0; currentWeek = ew; }
 
     const worked   = calcHours(entry.startTime, entry.endTime) - (entry.breakMins || 0) / 60;
@@ -131,7 +147,7 @@ export function processEntries(
   if (tfnRate !== undefined) {
     const weekGroups = new Map<string, number[]>();
     for (let i = 0; i < processed.length; i++) {
-      const ws = weekStart(processed[i].date);
+      const ws = budgetPeriod(processed[i].date, limitPeriod);
       if (!weekGroups.has(ws)) weekGroups.set(ws, []);
       weekGroups.get(ws)!.push(i);
     }

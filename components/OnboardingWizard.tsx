@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { Settings } from "@/types";
 import { createClient } from "@/lib/supabase";
 import { PasswordInput } from "@/components/PasswordInput";
+import { limitPeriodOf } from "@/lib/calculations";
 
 const WORKER_STEPS = ["Password", "Profile", "Work & Pay", "Invoicing"] as const;
 // Hour Bank workers are paid TFN only (excess hours are banked), so they never
@@ -228,7 +229,7 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
               {isOffice
                 ? "You'll clock in and out for each shift."
                 : "You'll log each shift with the job and client."}
-              {" "}You&apos;re paid on TFN salary up to {initialSettings.tfnLimit}h a week; any hours over that go into your Hour Bank.
+              {" "}You&apos;re paid on TFN salary up to {initialSettings.tfnLimit}h a {limitPeriodOf(initialSettings) === "month" ? "month" : "week"}; any hours over that go into your Hour Bank.
             </p>
             {initialSettings.tfnRate ? (
               <p style={{ fontSize: 13, margin: 0 }}>

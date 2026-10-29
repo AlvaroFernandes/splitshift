@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import type { ProcessedEntry, Totals, Settings } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
-import { weekStart } from "@/lib/calculations";
+import { weekStart, limitPeriodOf } from "@/lib/calculations";
 import { estimateNetForPeriod } from "@/lib/tax";
 
 function weekLabel(monStr: string): string {
@@ -25,6 +25,7 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
   // Overtime counts 1.5× towards the weekly TFN limit, so the hours actually
   // worked can come in under the limit even when it is fully used.
   const tfnLimit   = settings.tfnLimit ?? 30;
+  const monthly    = limitPeriodOf(settings) === "month";
 
   // Group TFN entries by Mon–Sun week
   const weekMap = new Map<string, ProcessedEntry[]>();
@@ -165,7 +166,9 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                           </span>
                         )}
                         <div style={{ color: "var(--color-text-tertiary)", fontSize: 11, fontWeight: 400 }}>
-                          {fh(wRegHrs + wOtHrs * 1.5)} of {fh(tfnLimit)} limit
+                          {monthly
+                            ? `${fh(wRegHrs + wOtHrs * 1.5)} towards monthly limit`
+                            : `${fh(wRegHrs + wOtHrs * 1.5)} of ${fh(tfnLimit)} limit`}
                         </div>
                       </td>
                     </tr>
@@ -191,7 +194,7 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
               <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>
                 {fh(regHrs + otHrs * 1.5)}
                 <span style={{ marginLeft: 6, color: "var(--color-text-tertiary)", fontSize: 13, fontWeight: 400 }}>
-                  of {fh(tfnLimit * weeks.length)}
+                  of {fh(tfnLimit * (monthly ? new Set(tfnEntries.map(e => e.date.slice(0, 7))).size : weeks.length))}
                 </span>
               </div>
             </div>

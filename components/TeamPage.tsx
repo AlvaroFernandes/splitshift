@@ -7,6 +7,7 @@ type Role = "user" | "admin" | "viewer";
 export interface WorkerRuleUpdate {
   userId: string;
   tfnLimit: number;
+  limitPeriod: "week" | "month"; // "month" only for Hour Bank workers
   tfnRate: string;
   overtimeThreshold: number;
   excessMode: "abn" | "bank";
@@ -63,6 +64,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
     const ws = workerSettings[id];
     return {
       tfnLimit:          ws?.tfnLimit          ?? 30,
+      limitPeriod:      (ws?.excessMode === "bank" && ws?.limitPeriod === "month" ? "month" : "week") as "week" | "month",
       tfnRate:           ws?.tfnRate           ?? "",
       overtimeThreshold: ws?.overtimeThreshold ?? 12,
       excessMode:       (ws?.excessMode        ?? "abn") as "abn" | "bank",
@@ -216,7 +218,12 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
     const tfnLimit = a === "abnOnly" ? 0 : r.tfnLimit === 0 ? savedLimitOr30(id) : r.tfnLimit;
     setRuleEdits(prev => ({
       ...prev,
-      [id]: { ...prev[id], excessMode: a === "bank" ? "bank" : "abn", tfnLimit, ...(a === "abnOnly" ? { tfnRate: "" } : {}) },
+      [id]: {
+        ...prev[id], excessMode: a === "bank" ? "bank" : "abn", tfnLimit,
+        // Monthly limits are Hour Bank only — ABN invoices are weekly.
+        ...(a !== "bank" ? { limitPeriod: "week" as const } : {}),
+        ...(a === "abnOnly" ? { tfnRate: "" } : {}),
+      },
     }));
   };
   const savedLimitOr30 = (id: string) => savedRules(id).tfnLimit || 30;
@@ -228,9 +235,19 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
     return (
       <>
         <td>
-          <input type="number" min="0" step="0.5" value={r.tfnLimit} disabled={off || abnOnly}
-            onChange={e => setRule(u.id, "tfnLimit", parseFloat(e.target.value) || 0)}
-            style={{ width: 70 }} aria-label={`TFN hour limit for ${u.name}`} />
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <input type="number" min="0" step="0.5" value={r.tfnLimit} disabled={off || abnOnly}
+              onChange={e => setRule(u.id, "tfnLimit", parseFloat(e.target.value) || 0)}
+              style={{ width: 70 }} aria-label={`TFN hour limit for ${u.name}`} />
+            {r.excessMode === "bank" ? (
+              <select value={r.limitPeriod} disabled={off} style={ruleSelectStyle}
+                onChange={e => setRule(u.id, "limitPeriod", e.target.value as "week" | "month")}
+                aria-label={`TFN limit period for ${u.name}`}>
+                <option value="week">/ week</option>
+                <option value="month">/ month</option>
+              </select>
+            ) : <span className="muted" style={{ fontSize: 12 }}>/ week</span>}
+          </span>
         </td>
         <td>
           <input type="number" min="0" step="0.01" placeholder={abnOnly ? "—" : "Entry rate"} value={r.tfnRate} disabled={off || abnOnly}
@@ -286,7 +303,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
         </div>
         {isWorkers && (
           <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 10 }}>
-            Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. Overtime is per shift. Hour Bank workers are either Site (full entry form) or Office (clock in/out only). ABN only workers invoice every hour (TFN limit 0).
+            Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. Overtime is per shift. Hour Bank workers are either Site (full entry form) or Office (clock in/out only). ABN only workers invoice every hour (TFN limit 0). Hour Bank workers can have a weekly or a monthly limit.
           </p>
         )}
         <table className="data-table">

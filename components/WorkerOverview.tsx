@@ -4,7 +4,7 @@ import type { BankClosure } from "@/services/bankClosures";
 import type { BankAdjustment } from "@/services/bankAdjustments";
 import { bankBalance as calcBankBalance } from "@/lib/hourBank";
 import { fh, fc, todayStr } from "@/lib/formatters";
-import { weekStart, weekEnd } from "@/lib/calculations";
+import { weekStart, weekEnd, limitPeriodOf, budgetPeriod } from "@/lib/calculations";
 import { nextPayday, payday, payFortnight } from "@/lib/payroll";
 import { estimateNetForPeriod } from "@/lib/tax";
 
@@ -66,8 +66,21 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
     return { ws, byDay, used, extra, hours };
   }, [processed, today]);
 
-  const pct      = tfnLimit > 0 ? Math.min(100, (week.used / tfnLimit) * 100) : 100;
-  const left     = Math.max(0, tfnLimit - week.used);
+  // TFN budget used so far in the current limit period — this week, or this
+  // calendar month for a monthly limit.
+  const period  = limitPeriodOf(settings);
+  const thisPer = period === "month" ? "this month" : "this week";
+  const budget  = useMemo(() => {
+    const key = budgetPeriod(today, period);
+    const entries = processed.filter(e => budgetPeriod(e.date, period) === key);
+    return {
+      used:  entries.reduce((a, e) => a + e.rTFN + e.otTFN * 1.5, 0),
+      extra: entries.reduce((a, e) => a + e.abnPortion, 0),
+    };
+  }, [processed, today, period]);
+
+  const pct      = tfnLimit > 0 ? Math.min(100, (budget.used / tfnLimit) * 100) : 100;
+  const left     = Math.max(0, tfnLimit - budget.used);
   const extraDst = isBank ? "your Hour Bank" : "your ABN invoice";
 
   // ── Next payday ─────────────────────────────────────────────────────────────
@@ -136,16 +149,16 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
             <p className="ov-status">All your hours go on your ABN invoice.</p>
           ) : <>
           <div className="ov-progress" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}
-            aria-label="TFN limit used this week">
+            aria-label={`TFN limit used ${thisPer}`}>
             <div className={`ov-progress-fill${pct >= 100 ? " full" : ""}`} style={{ width: `${pct}%` }} />
           </div>
           <div className="ov-progress-labels">
-            <span><span className="mono">{fh(week.used)}</span> of {fh(tfnLimit)} TFN limit used</span>
+            <span><span className="mono">{fh(budget.used)}</span> of {fh(tfnLimit)} TFN limit used{period === "month" ? " this month" : ""}</span>
             <span className="mono">{Math.round(pct)}%</span>
           </div>
           <p className="ov-status">
             {pct >= 100
-              ? <>Limit reached — <b>{fh(week.extra)}</b> going to {extraDst} this week.</>
+              ? <>Limit reached — <b>{fh(budget.extra)}</b> going to {extraDst} {thisPer}.</>
               : <><b>{fh(left)}</b> left before extra hours go to {extraDst}.</>}
           </p>
           </>}
@@ -236,7 +249,7 @@ export const WorkerOverview = React.memo(function WorkerOverview({ processed, se
           <dl className="ov-list">
             {abnOnly
               ? <div><dt>Arrangement</dt><dd>ABN only</dd></div>
-              : <div><dt>Weekly TFN limit</dt><dd className="mono">{fh(tfnLimit)}</dd></div>}
+              : <div><dt>{period === "month" ? "Monthly" : "Weekly"} TFN limit</dt><dd className="mono">{fh(tfnLimit)}</dd></div>}
             {!hideMoney && !abnOnly && <div><dt>TFN rate</dt><dd className="mono">{isNaN(tfnRate) ? "Entry rate" : `${fc(tfnRate)}/h`}</dd></div>}
             <div><dt>Overtime after</dt><dd className="mono">{fh(settings.overtimeThreshold || 12)} / shift</dd></div>
             {!abnOnly && <div><dt>Extra hours go to</dt><dd>{isBank ? "Hour Bank" : "ABN invoice"}</dd></div>}
