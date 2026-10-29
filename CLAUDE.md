@@ -62,6 +62,8 @@ The intersection produces four buckets per entry: `rTFN`, `otTFN`, `rABN`, `otAB
 
 - `user` — standard worker; has all tabs (Dashboard, Log Entry, Entries, Weekly Report, TFN Report, ABN Invoice, Invoices)
 - `admin` — managed via `profiles` table (`role = 'admin'`); sees combined entries for all workers under them; no Log Entry / TFN Report / ABN Invoice tabs
+- `viewer` — read-only accountant: Dashboard, Entries, Weekly Report for the whole team
+- Workers with `profiles.team_access` ("Accountant access", set on the Team tab) keep their own tabs plus read-only Team Report / Team Invoices; RLS treats them as viewers via `is_viewer()`
 
 **Tabs:** Dashboard · Log Entry · Entries · Weekly Report · TFN Report · ABN Invoice · Invoices
 

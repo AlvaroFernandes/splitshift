@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useAppData } from "@/hooks/useAppData";
+import type { SavedInvoice } from "@/types";
 import { Dashboard }      from "./Dashboard";
 import { LogEntry }       from "./LogEntry";
 import { EntriesList }    from "./EntriesList";
@@ -48,7 +49,14 @@ export default function WorkHoursTracker() {
     showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
     showOnboarding, handleCompleteOnboarding,
     managedViewers, auditLog, adminCompanyInfo,
+    teamView, teamWeeklyData, teamInvoices, teamIsHoursOnly,
   } = useAppData();
+  // Accountant access: the team invoice being viewed (read-only).
+  const [viewingTeamInvoice, setViewingTeamInvoice] = React.useState<SavedInvoice | null>(null);
+  const teamInvoiceWorkers = React.useMemo(
+    () => new Map(teamInvoices.map(t => [t.inv.id, t.workerName])),
+    [teamInvoices],
+  );
 
   if (loading) {
     return (
@@ -179,6 +187,19 @@ export default function WorkHoursTracker() {
           <InvoiceHistory invoices={invoiceHistory} viewing={viewingInvoice}
             onView={setViewingInvoice} pdfNamePattern={settings.pdfNamePattern}
             onDelete={handleDeleteInvoice} onShare={handleShareInvoice} onUpdate={handleUpdateInvoice} />
+        )}
+        {tab === "team-weekly" && teamView && (
+          <WeeklyReport processed={teamWeeklyData} settings={settings} isAdmin isReadOnly
+            users={teamView.users}
+            invoiceHistoryByWorker={teamView.invoicesByWorker}
+            bankClosuresByWorker={teamView.closuresByWorker}
+            workerSettings={teamView.workerSettings}
+            isHoursOnly={teamIsHoursOnly} />
+        )}
+        {tab === "team-invoices" && teamView && (
+          <InvoiceHistory invoices={teamInvoices.map(t => t.inv)} viewing={viewingTeamInvoice}
+            onView={setViewingTeamInvoice} pdfNamePattern={settings.pdfNamePattern}
+            workerNames={teamInvoiceWorkers} />
         )}
         {tab === "team" && userRole === "admin" && (
           <TeamPage users={managedUsers} admins={managedAdmins} viewers={managedViewers}

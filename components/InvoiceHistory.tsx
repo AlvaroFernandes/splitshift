@@ -125,20 +125,23 @@ function EditInvoiceForm({ inv, onSave, onCancel }: {
   );
 }
 
-export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, viewing, onView, onDelete, onShare, onUpdate, pdfNamePattern }: {
+// Without onDelete/onShare/onUpdate the list is read-only (accountant's
+// Team Invoices view); workerNames (keyed by invoice id) adds a Worker column.
+export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, viewing, onView, onDelete, onShare, onUpdate, pdfNamePattern, workerNames }: {
   invoices: SavedInvoice[];
   viewing: SavedInvoice | null;
   onView: (inv: SavedInvoice | null) => void;
-  onDelete: (id: string) => void;
-  onShare: (id: string) => void;
-  onUpdate: (inv: SavedInvoice) => void;
+  onDelete?: (id: string) => void;
+  onShare?: (id: string) => void;
+  onUpdate?: (inv: SavedInvoice) => void;
   pdfNamePattern: string;
+  workerNames?: Map<string, string>;
 }) {
   const [downloading, setDownloading] = useState(false);
   const [editing,     setEditing]     = useState(false);
 
   if (viewing) {
-    if (editing) {
+    if (editing && onUpdate) {
       return (
         <div>
           <div className="print-actions no-print">
@@ -160,9 +163,11 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
           <button className="btn-secondary" onClick={() => onView(null)}>
             <i className="ti ti-arrow-left" aria-hidden="true" /> Back to list
           </button>
-          <button className="btn-secondary" onClick={() => setEditing(true)}>
-            <i className="ti ti-edit" aria-hidden="true" /> Edit
-          </button>
+          {onUpdate && (
+            <button className="btn-secondary" onClick={() => setEditing(true)}>
+              <i className="ti ti-edit" aria-hidden="true" /> Edit
+            </button>
+          )}
           <button className="btn-secondary" disabled={downloading} onClick={async () => {
             setDownloading(true);
             const filename = buildPdfFilename(
@@ -177,9 +182,11 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
             <i className="ti ti-download" aria-hidden="true" />
             {downloading ? "Generating…" : "Download PDF"}
           </button>
-          <button className="btn-secondary" onClick={() => onShare(viewing.id)}>
-            <i className="ti ti-link" aria-hidden="true" /> Copy share link
-          </button>
+          {onShare && (
+            <button className="btn-secondary" onClick={() => onShare(viewing.id)}>
+              <i className="ti ti-link" aria-hidden="true" /> Copy share link
+            </button>
+          )}
         </div>
         <SavedInvoiceDoc inv={viewing} />
       </div>
@@ -192,7 +199,7 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
         <i className="ti ti-history" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
         <p>No past invoices</p>
         <p style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-          Mark an ABN invoice as sent to save it here
+          {workerNames ? "Invoices the team saves in SplitShift show up here" : "Mark an ABN invoice as sent to save it here"}
         </p>
       </div>
     );
@@ -206,6 +213,7 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
           <thead>
             <tr>
               <th>Invoice #</th>
+              {workerNames && <th>Worker</th>}
               <th>Issue date</th>
               <th>Company</th>
               <th>Total</th>
@@ -216,6 +224,7 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
             {invoices.map(inv => (
               <tr key={inv.id}>
                 <td className="mono" style={{ fontWeight: 500 }}>#{inv.invoiceNum}</td>
+                {workerNames && <td>{workerNames.get(inv.id) ?? "—"}</td>}
                 <td className="mono" style={{ fontSize: 12 }}>{fdInv(inv.issueDate)}</td>
                 <td>{inv.companyName || <span className="muted">—</span>}</td>
                 <td className="mono" style={{ fontWeight: 500 }}>
@@ -226,13 +235,17 @@ export const InvoiceHistory = React.memo(function InvoiceHistory({ invoices, vie
                     <button className="icon-btn-sm" onClick={() => onView(inv)} aria-label="View invoice">
                       <i className="ti ti-eye" aria-hidden="true" />
                     </button>
-                    <button className="icon-btn-sm" onClick={() => onShare(inv.id)} aria-label="Copy share link"
-                      title={inv.shareToken ? "Copy share link" : "Generate & copy share link"}>
-                      <i className={`ti ${inv.shareToken ? "ti-link" : "ti-share"}`} aria-hidden="true" />
-                    </button>
-                    <button className="icon-btn-sm danger" onClick={() => onDelete(inv.id)} aria-label="Delete">
-                      <i className="ti ti-trash" aria-hidden="true" />
-                    </button>
+                    {onShare && (
+                      <button className="icon-btn-sm" onClick={() => onShare(inv.id)} aria-label="Copy share link"
+                        title={inv.shareToken ? "Copy share link" : "Generate & copy share link"}>
+                        <i className={`ti ${inv.shareToken ? "ti-link" : "ti-share"}`} aria-hidden="true" />
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button className="icon-btn-sm danger" onClick={() => onDelete(inv.id)} aria-label="Delete">
+                        <i className="ti ti-trash" aria-hidden="true" />
+                      </button>
+                    )}
                   </span>
                 </td>
               </tr>

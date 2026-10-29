@@ -65,13 +65,13 @@ export async function POST(request: NextRequest) {
 // Updates a team member's name and/or sign-in email. Profiles are only
 // writable by their owner under RLS, so this runs with the service role.
 export async function PATCH(request: NextRequest) {
-  const body = await request.json() as { userId?: string; name?: string; email?: string };
+  const body = await request.json() as { userId?: string; name?: string; email?: string; teamAccess?: boolean };
   const auth = await requireTeamMember(body.userId);
   if ("error" in auth) return auth.error;
   const { admin } = auth;
   const userId = body.userId!;
 
-  const changes: { name?: string; email?: string } = {};
+  const changes: { name?: string; email?: string; team_access?: boolean } = {};
   if (typeof body.name === "string") changes.name = body.name.trim();
   if (typeof body.email === "string") {
     const email = body.email.trim().toLowerCase();
@@ -80,7 +80,9 @@ export async function PATCH(request: NextRequest) {
     }
     changes.email = email;
   }
-  if (!changes.name && !changes.email) return NextResponse.json({ ok: true });
+  // Accountant access: read-only view of the whole team's reports/invoices.
+  if (typeof body.teamAccess === "boolean") changes.team_access = body.teamAccess;
+  if (!changes.name && !changes.email && changes.team_access === undefined) return NextResponse.json({ ok: true });
 
   if (changes.email) {
     // Confirmed straight away — the admin vouches for the new address, and the

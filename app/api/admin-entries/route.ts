@@ -3,12 +3,12 @@ import { createClient as createServerClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { rowToEntry } from "@/services/entries";
 
-// Resolves the root admin ID for any admin/viewer caller.
+// Resolves the root admin ID for any caller: the owner is their own root;
+// co-admins, viewers and workers point at it through admin_id.
 async function resolveRootAdminId(adminClient: ReturnType<typeof createAdminClient>, userId: string): Promise<string> {
   const { data } = await adminClient
-    .from("profiles").select("role, admin_id").eq("user_id", userId).maybeSingle();
-  const p = data as { role: string; admin_id: string | null } | null;
-  return (p?.role === "admin" && p?.admin_id) ? p.admin_id : userId;
+    .from("profiles").select("admin_id").eq("user_id", userId).maybeSingle();
+  return (data as { admin_id: string | null } | null)?.admin_id ?? userId;
 }
 
 export async function GET() {
@@ -16,11 +16,11 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
 
-  // Verify caller is admin or viewer
+  // Verify caller is admin, viewer, or a worker with accountant (team) access
   const { data: profile } = await supabase
-    .from("profiles").select("role, admin_id").eq("user_id", user.id).maybeSingle();
-  const p = profile as { role: string; admin_id: string | null } | null;
-  if (!p || (p.role !== "admin" && p.role !== "viewer")) {
+    .from("profiles").select("role, admin_id, team_access").eq("user_id", user.id).maybeSingle();
+  const p = profile as { role: string; admin_id: string | null; team_access: boolean | null } | null;
+  if (!p || !(p.role === "admin" || p.role === "viewer" || (p.role === "user" && p.team_access))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

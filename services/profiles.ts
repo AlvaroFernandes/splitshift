@@ -11,15 +11,15 @@ export async function ensureProfile(supabase: SupabaseClient, userId: string, em
   return true;
 }
 
-export async function getProfile(supabase: SupabaseClient, userId: string): Promise<{ role: UserRole; adminId: string | null }> {
+export async function getProfile(supabase: SupabaseClient, userId: string): Promise<{ role: UserRole; adminId: string | null; teamAccess: boolean }> {
   const { data } = await supabase
-    .from("profiles").select("role, admin_id").eq("user_id", userId).maybeSingle();
+    .from("profiles").select("role, admin_id, team_access").eq("user_id", userId).maybeSingle();
   const p = data as Record<string, unknown> | null;
   const raw = (p?.role as string) ?? "user";
   const role: UserRole = (["user", "admin", "viewer"] as const).includes(raw as UserRole)
     ? (raw as UserRole)
     : "user";
-  return { role, adminId: (p?.admin_id as string) ?? null };
+  return { role, adminId: (p?.admin_id as string) ?? null, teamAccess: p?.team_access === true };
 }
 
 async function resolveRootAdminId(supabase: SupabaseClient, adminId: string): Promise<string> {
@@ -40,6 +40,7 @@ function rowsToUsers(data: unknown[]): ManagedUser[] {
     status:    "pending" as const,
     invitedAt: null,
     removedAt: (p.removed_at as string | null) ?? null,
+    teamAccess: p.team_access === true,
   }));
 }
 
@@ -52,10 +53,10 @@ export async function getManagedTeam(
 ): Promise<{ users: ManagedUser[]; admins: ManagedUser[]; viewers: ManagedUser[] }> {
   const rootAdminId = await resolveRootAdminId(supabase, adminId);
   const [usersRes, adminsRes, ownerRes, viewersRes] = await Promise.all([
-    supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "user"),
-    supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "admin").neq("user_id", rootAdminId),
-    supabase.from("profiles").select("user_id, name, email, removed_at").eq("user_id", rootAdminId),
-    supabase.from("profiles").select("user_id, name, email, removed_at").eq("admin_id", rootAdminId).eq("role", "viewer"),
+    supabase.from("profiles").select("user_id, name, email, removed_at, team_access").eq("admin_id", rootAdminId).eq("role", "user"),
+    supabase.from("profiles").select("user_id, name, email, removed_at, team_access").eq("admin_id", rootAdminId).eq("role", "admin").neq("user_id", rootAdminId),
+    supabase.from("profiles").select("user_id, name, email, removed_at, team_access").eq("user_id", rootAdminId),
+    supabase.from("profiles").select("user_id, name, email, removed_at, team_access").eq("admin_id", rootAdminId).eq("role", "viewer"),
   ]);
   const owner  = rowsToUsers(ownerRes.data ?? []).map(u => ({ ...u, isOwner: true }));
   const admins = [...owner, ...rowsToUsers(adminsRes.data ?? [])].filter(u => u.id !== adminId);

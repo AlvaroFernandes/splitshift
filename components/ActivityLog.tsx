@@ -50,6 +50,13 @@ const ACTION_DEFS: Record<string, ActionDef> = {
       ? `Updated ${m.fromName ?? "user"}'s details (email ${m.fromEmail} → ${m.toEmail})`
       : `Renamed ${m.fromName ?? "user"} to ${m.toName ?? "—"}`,
   },
+  member_access_changed: {
+    icon:  "ti-key",
+    color: "var(--color-text-info)",
+    label: m => m.granted
+      ? `Gave ${m.name ?? "user"} accountant access`
+      : `Removed accountant access from ${m.name ?? "user"}`,
+  },
   worker_rules_saved: {
     icon:  "ti-adjustments",
     color: "var(--color-text-warning)",

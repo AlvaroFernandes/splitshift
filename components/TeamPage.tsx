@@ -19,6 +19,7 @@ type Rules = Omit<WorkerRuleUpdate, "userId">;
 interface Draft {
   name: string;
   email: string;
+  teamAccess: boolean; // workers only — accountant access
 }
 
 const selectStyle: React.CSSProperties = {
@@ -43,7 +44,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
   workerSettings: Record<string, Settings>;
   onInvite: (email: string, role: Role, name?: string) => void | Promise<void>;
   onResendInvite: (target: ManagedUser, role: Role) => void | Promise<void>;
-  onUpdateMember: (target: ManagedUser, role: Role, changes: { name: string; email: string }) => Promise<boolean>;
+  onUpdateMember: (target: ManagedUser, role: Role, changes: { name: string; email: string; teamAccess?: boolean }) => Promise<boolean>;
   onSaveWorkerRules: (rules: WorkerRuleUpdate[]) => void | Promise<void>;
   onSetRemoved: (target: ManagedUser, role: Role, removed: boolean) => void | Promise<void>;
 }) {
@@ -96,7 +97,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
   const startEdit = (u: ManagedUser) => {
     setConfirmId(null);
     setEditingId(u.id);
-    setDraft({ name: u.name, email: u.email });
+    setDraft({ name: u.name, email: u.email, teamAccess: !!u.teamAccess });
   };
   const cancelEdit = () => { setEditingId(null); setDraft(null); };
   const d = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft(prev => prev ? { ...prev, [k]: v } : prev);
@@ -108,8 +109,9 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
     if (!email) return;
     setBusyId(u.id);
     try {
-      if (name !== u.name || email !== u.email) {
-        if (!await onUpdateMember(u, role, { name, email })) return;
+      const accessChanged = role === "user" && draft.teamAccess !== !!u.teamAccess;
+      if (name !== u.name || email !== u.email || accessChanged) {
+        if (!await onUpdateMember(u, role, { name, email, ...(accessChanged ? { teamAccess: draft.teamAccess } : {}) })) return;
       }
       cancelEdit();
     } finally {
@@ -197,6 +199,17 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
             <label htmlFor={`t-email-${u.id}`}>Email (used to sign in)</label>
             <input id={`t-email-${u.id}`} type="email" required value={draft.email} onChange={e => d("email", e.target.value)} />
           </div>
+          {role === "user" && (
+            <div className="field full">
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13 }}>
+                <input type="checkbox" checked={draft.teamAccess} onChange={e => d("teamAccess", e.target.checked)} />
+                Accountant access
+              </label>
+              <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
+                Keeps logging their own hours, and can also see every worker&apos;s weekly report and saved invoices (read-only).
+              </span>
+            </div>
+          )}
           <div className="field full" style={{ flexDirection: "row", gap: 8 }}>
             <button type="submit" className="btn-primary" disabled={busyId === u.id}>
               <i className="ti ti-check" aria-hidden="true" /> {busyId === u.id ? "Saving…" : "Save"}
@@ -312,7 +325,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
               <th>{isWorkers ? "Worker" : "Name"}</th>
               {isWorkers ? (
                 <>
-                  <th>TFN limit (hrs/wk)</th>
+                  <th>TFN limit (hrs)</th>
                   <th>TFN rate (AUD/hr)</th>
                   <th>Overtime after (hrs)</th>
                   <th>Extra hours</th>
@@ -328,7 +341,10 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
                 <tr style={{ opacity: u.removedAt ? 0.6 : 1 }}>
                   {isWorkers ? (
                     <td>
-                      <div style={{ fontWeight: 500 }}>{u.name}</div>
+                      <div style={{ fontWeight: 500 }}>
+                        {u.name}
+                        {u.teamAccess && <span style={{ marginLeft: 6 }}><Bdg type="abn">Accountant</Bdg></span>}
+                      </div>
                       <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{u.email}</div>
                     </td>
                   ) : (

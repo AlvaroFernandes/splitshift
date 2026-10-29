@@ -111,6 +111,15 @@ export function useAppData() {
   const [bankAdjustmentsByWorker, setBankAdjustmentsByWorker] = useState<Record<string, BankAdjustment[]>>({});
   const [reminderDismissed,  setReminderDismissed]  = useState(false);
   const [auditLog,           setAuditLog]           = useState<AuditEntry[]>([]);
+  // Workers with accountant access: a read-only copy of the whole team's data
+  // for the Team Report / Team Invoices tabs. Null for everyone else.
+  const [teamView, setTeamView] = useState<{
+    users: ManagedUser[];
+    entries: Entry[];
+    workerSettings: Record<string, Settings>;
+    invoicesByWorker: Record<string, SavedInvoice[]>;
+    closuresByWorker: Record<string, BankClosure[]>;
+  } | null>(null);
   const [adminCompanyInfo,   setAdminCompanyInfo]   = useState<{ companyName: string; companyAbn: string; companyAddress: string; companyEmail: string } | null>(null);
 
   // Refs for stale-closure-safe reads inside memoised callbacks
@@ -154,7 +163,7 @@ export function useAppData() {
           return;
         }
 
-        const { role, adminId } = await getProfile(supabase, user.id);
+        const { role, adminId, teamAccess } = await getProfile(supabase, user.id);
         setUserRole(role);
 
         if (role === "admin") {
@@ -221,6 +230,26 @@ export function useAppData() {
           setInvoiceHistory(invoices);
           setBankClosures(closures);
           setBankAdjustments(adjustments);
+
+          if (teamAccess && adminId) {
+            const [team, teamEntriesRes] = await Promise.all([
+              getManagedTeam(supabase, adminId),
+              fetch("/api/admin-entries"),
+            ]);
+            const workerIds = team.users.map(u => u.id);
+            const [teamSettings, teamInvoices, teamClosures] = await Promise.all([
+              getWorkerSettings(supabase, workerIds),
+              getInvoicesForWorkers(supabase, workerIds),
+              getBankClosuresForWorkers(supabase, workerIds),
+            ]);
+            setTeamView({
+              users: team.users,
+              entries: teamEntriesRes.ok ? await teamEntriesRes.json() : [],
+              workerSettings: teamSettings,
+              invoicesByWorker: teamInvoices,
+              closuresByWorker: teamClosures,
+            });
+          }
         }
 
         setLoading(false);
@@ -586,6 +615,29 @@ export function useAppData() {
     [editId, entries],
   );
 
+  // Accountant access: every worker's hours processed under their own rules
+  // (and each closed week's frozen regime), as in the admin Weekly Report.
+  const teamWeeklyData = useMemo(() => {
+    if (!teamView) return [];
+    return teamView.users.flatMap(u => processEntriesWithHistory(
+      teamView.entries.filter(e => e.ownerId === u.id),
+      teamView.workerSettings[u.id] ?? DEFAULT_SETTINGS,
+      teamView.invoicesByWorker[u.id] ?? [], teamView.closuresByWorker[u.id] ?? [],
+    ));
+  }, [teamView]);
+  // Every saved invoice on the team, newest first, with who it belongs to.
+  const teamInvoices = useMemo(() => {
+    if (!teamView) return [];
+    const names = new Map(teamView.users.map(u => [u.id, u.name]));
+    return Object.entries(teamView.invoicesByWorker)
+      .flatMap(([uid, list]) => list.map(inv => ({ inv, workerName: names.get(uid) ?? "—" })))
+      .sort((a, b) => b.inv.issueDate.localeCompare(a.inv.issueDate) || b.inv.invoiceNum - a.inv.invoiceNum);
+  }, [teamView]);
+  const teamIsHoursOnly = useCallback(
+    (ownerId?: string | null) => teamView?.workerSettings[ownerId ?? ""]?.excessMode === "bank",
+    [teamView],
+  );
+
   // Already-invoiced entries a worker can still correct; editing/deleting one
   // triggers recomputeInvoiceForEntry to keep the saved invoice in sync.
   const archivedEntries = useMemo(
@@ -632,8 +684,13 @@ export function useAppData() {
       ...(!isBank || hasInvoiceHistory ? [
         { id: "history", label: "Invoices",     icon: "ti-history"          },
       ] : []),
+      // Accountant access: read-only views of the whole team.
+      ...(teamView ? [
+        { id: "team-weekly",   label: "Team Report",   icon: "ti-report-analytics" },
+        { id: "team-invoices", label: "Team Invoices", icon: "ti-file-invoice"     },
+      ] : []),
     ];
-  }, [userRole, settings.excessMode, settings.tfnLimit, bankClosures, bankAdjustments.length, invoiceHistory.length]);
+  }, [userRole, settings.excessMode, settings.tfnLimit, bankClosures, bankAdjustments.length, invoiceHistory.length, teamView]);
 
   const clients = useMemo(() =>
     [...new Set(entries.map(e => e.client).filter(Boolean))].sort() as string[],
@@ -696,7 +753,7 @@ export function useAppData() {
   // Updates a team member's name and/or sign-in email. Returns false on failure
   // so the Team page keeps the edit form open.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handleUpdateMember = useCallback(async (target: ManagedUser, role: "user" | "admin" | "viewer", changes: { name: string; email: string }) => {
+  const handleUpdateMember = useCallback(async (target: ManagedUser, role: "user" | "admin" | "viewer", changes: { name: string; email: string; teamAccess?: boolean }) => {
     const res = await fetch("/api/team", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -705,9 +762,14 @@ export function useAppData() {
     const json = await res.json();
     if (!res.ok) { showToast(json.error ?? "Could not update team member", "err"); return false; }
     showToast(`${changes.name || changes.email} updated`);
-    recordAudit("member_updated", null, target.id, {
-      fromName: target.name, toName: changes.name, fromEmail: target.email, toEmail: changes.email, role,
-    });
+    if (changes.name !== target.name || changes.email !== target.email) {
+      recordAudit("member_updated", null, target.id, {
+        fromName: target.name, toName: changes.name, fromEmail: target.email, toEmail: changes.email, role,
+      });
+    }
+    if (changes.teamAccess !== undefined) {
+      recordAudit("member_access_changed", null, target.id, { name: changes.name || target.name, granted: changes.teamAccess });
+    }
     await refreshManagedList();
     return true;
   }, [refreshManagedList]); // showToast/recordAudit are stable
@@ -992,5 +1054,6 @@ export function useAppData() {
     handleCompleteOnboarding,
     auditLog,
     adminCompanyInfo,
+    teamView, teamWeeklyData, teamInvoices, teamIsHoursOnly,
   };
 }

@@ -22,6 +22,7 @@ export interface ManagedUser {
   invitedAt: string | null;
   removedAt?: string | null; // removed from the team — no access, history kept
   isOwner?: boolean;          // the team's root admin — hidden from the Team tab
+  teamAccess?: boolean;       // worker with accountant access — reads the whole team's reports/invoices
 }
 
 export type UserRole = "user" | "admin" | "viewer";
