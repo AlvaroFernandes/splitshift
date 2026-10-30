@@ -126,12 +126,10 @@ export async function POST(request: NextRequest) {
     startTime: string; endTime: string; breakMins: number; hourlyRate: number;
   };
 
-  await resend.emails.send({
-    from:    FROM,
-    to:      adminEmails,
-    subject: `[SplitShift] ${workerName} logged a new entry`,
-    html:    buildHtml(workerName, body),
-  });
+  // One email per admin so recipients never see each other's addresses.
+  const subject = `[SplitShift] ${workerName} logged a new entry`;
+  const html    = buildHtml(workerName, body);
+  await resend.batch.send(adminEmails.map(to => ({ from: FROM, to, subject, html })));
 
   return NextResponse.json({ ok: true });
 }
