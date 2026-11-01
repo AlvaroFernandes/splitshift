@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { Settings } from "@/types";
-import { createClient } from "@/lib/supabase";
+import { updatePassword } from "@/lib/password";
 import { PasswordInput } from "@/components/PasswordInput";
 import { limitPeriodOf } from "@/lib/calculations";
 
@@ -81,9 +81,9 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
     if (pwd.length < 8)   { setPwdError("Password must be at least 8 characters."); return false; }
     if (pwd !== confirmPwd) { setPwdError("Passwords do not match."); return false; }
     setPwdLoading(true);
-    const { error } = await createClient().auth.updateUser({ password: pwd });
+    const error = await updatePassword(pwd);
     setPwdLoading(false);
-    if (error) { setPwdError(error.message); return false; }
+    if (error) { setPwdError(error); return false; }
     return true;
   };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type { EntryTemplate, Settings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/services/settings";
-import { createClient } from "@/lib/supabase";
+import { updatePassword } from "@/lib/password";
 
 interface Props {
   settings: Settings;
@@ -194,9 +194,9 @@ export const SettingsPage = React.memo(function SettingsPage({ settings, onSave,
                       if (newPwd !== confirmPwd) { setPwdMsg({ text: "Passwords do not match.", ok: false }); return; }
                       if (newPwd.length < 8)     { setPwdMsg({ text: "Password must be at least 8 characters.", ok: false }); return; }
                       setPwdLoading(true);
-                      const { error } = await createClient().auth.updateUser({ password: newPwd });
+                      const error = await updatePassword(newPwd);
                       setPwdLoading(false);
-                      if (error) { setPwdMsg({ text: error.message, ok: false }); }
+                      if (error) { setPwdMsg({ text: error, ok: false }); }
                       else       { setPwdMsg({ text: "Password updated.", ok: true }); setNewPwd(""); setConfirmPwd(""); }
                     }}
                   >
