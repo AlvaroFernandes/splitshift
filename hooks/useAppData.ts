@@ -897,13 +897,19 @@ export function useAppData() {
 
   const dismissReminder = useCallback(() => setReminderDismissed(true), []);
 
-  const handleCompleteOnboarding = useCallback((partial: Partial<Settings>) => {
+  // Saves before closing the wizard: if the save fails the wizard stays open
+  // with the user's answers, instead of closing and silently losing them.
+  const handleCompleteOnboarding = useCallback(async (partial: Partial<Settings>): Promise<boolean> => {
     const s = { ...settings, ...partial, onboardingCompleted: true };
+    if (userId && !(await persistSettings(s, periodStart, periodEnd))) {
+      showToast("Could not save your details. Please try again.", "err");
+      return false;
+    }
     setSettings(s);
-    if (userId) saveSettings(s, periodStart, periodEnd);
     // Admin onboarding collects the team's shared company info.
     if (userRole === "admin" && COMPANY_KEYS.some(k => k in partial)) persistCompanyInfo(s);
-  }, [settings, userId, userRole, periodStart, periodEnd]); // saveSettings/setSettings are stable
+    return true;
+  }, [settings, userId, userRole, periodStart, periodEnd]); // showToast/setSettings are stable
 
   const { showReminder, reminderDaysSince } = useMemo(() => {
     if (userRole === "admin" || userRole === "viewer" || settings.reminderEnabled === false || loading) {

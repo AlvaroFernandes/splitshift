@@ -43,8 +43,8 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
   initialSettings, onComplete, onSkip, isAdmin,
 }: {
   initialSettings: Settings;
-  onComplete: (partial: Partial<Settings>) => void;
-  onSkip: () => void;
+  onComplete: (partial: Partial<Settings>) => Promise<boolean>;
+  onSkip: () => Promise<boolean>;
   isAdmin?: boolean;
 }) {
   const [step,       setStep]       = useState(0);
@@ -52,6 +52,14 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
   const [confirmPwd, setConfirmPwd] = useState("");
   const [pwdError,   setPwdError]   = useState<string | null>(null);
   const [pwdLoading, setPwdLoading] = useState(false);
+  const [saving,     setSaving]     = useState(false);
+
+  // The parent keeps the wizard open if saving fails, so just re-enable.
+  const finish = async (save: () => Promise<boolean>) => {
+    setSaving(true);
+    await save();
+    setSaving(false);
+  };
   const [form, setForm] = useState({
     yourName:      initialSettings.yourName      || "",
     yourEmail:     initialSettings.yourEmail     || "",
@@ -94,7 +102,8 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
 
   const skipBtn = (
     <button
-      onClick={onSkip}
+      onClick={() => finish(onSkip)}
+      disabled={saving}
       style={{ fontSize: 12, color: "var(--color-text-tertiary)", background: "none", border: "none", cursor: "pointer", padding: "4px 2px" }}
     >
       Skip for now
@@ -117,14 +126,14 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 28 }}>
             <button
               className="btn-primary"
-              disabled={pwdLoading}
+              disabled={pwdLoading || saving}
               onClick={async () => {
                 const ok = await applyPassword();
-                if (ok) onComplete({});
+                if (ok) await finish(() => onComplete({}));
               }}
             >
               <i className="ti ti-check" aria-hidden="true" />
-              {pwdLoading ? "Saving…" : "Get started"}
+              {pwdLoading || saving ? "Saving…" : "Get started"}
             </button>
             {skipBtn}
           </div>
@@ -317,8 +326,8 @@ export const OnboardingWizard = React.memo(function OnboardingWizard({
                 {pwdLoading ? "Saving…" : "Next"} {!pwdLoading && <i className="ti ti-arrow-right" aria-hidden="true" />}
               </button>
             ) : (
-              <button className="btn-primary" onClick={() => onComplete(form)}>
-                <i className="ti ti-check" aria-hidden="true" /> Get started
+              <button className="btn-primary" disabled={saving} onClick={() => finish(() => onComplete(form))}>
+                <i className="ti ti-check" aria-hidden="true" /> {saving ? "Saving…" : "Get started"}
               </button>
             )}
           </div>

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { createAdminClient } from "@/lib/supabase-admin";
 
 // Sets the signed-in user's password. Runs server-side because the browser
 // client's session can go missing (e.g. after a failed token refresh) while
 // the cookie session the proxy validates is still good — and an invited user
 // with no password yet can't sign back in to retry.
+//
+// Uses the user's own cookie session rather than the admin API: an admin
+// password update signs the user out of every session, including this one,
+// so anything saved afterwards (e.g. the rest of onboarding) would fail.
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -18,7 +21,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
   }
 
-  const { error } = await createAdminClient().auth.admin.updateUserById(user.id, { password });
+  const { error } = await supabase.auth.updateUser({ password });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
