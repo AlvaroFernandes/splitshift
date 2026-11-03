@@ -2,7 +2,7 @@ import React from "react";
 import type { ProcessedEntry, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
 import type { BankAdjustment } from "@/services/bankAdjustments";
-import { fh, fd, todayStr } from "@/lib/formatters";
+import { fh, fhSigned, fd, todayStr } from "@/lib/formatters";
 import { weekStart, weekEnd, limitPeriodOf } from "@/lib/calculations";
 import { Metric, Bdg } from "./ui";
 
@@ -128,7 +128,7 @@ export const HourBank = React.memo(function HourBank({ bankClosures: allClosures
       </div>
 
       <div className="metric-grid mt-3">
-        <Metric label="Bank balance"     value={fh(balance)}      sub="accrued, all time"                        bold />
+        <Metric label="Bank balance"     value={fhSigned(balance)}      sub="accrued, all time"                        bold />
         <Metric label="This period"      value={fh(periodBanked)} sub="banked in current period"                 color="info" />
         <Metric label="This week"        value={fh(thisWeekPending)} sub="pending — week not yet closed"         color="info" />
         <Metric label="Paid out"         value={fh(paidOut)}      sub="banked hours paid by your admin"           />
@@ -173,7 +173,7 @@ export const HourBank = React.memo(function HourBank({ bankClosures: allClosures
                       : row.hours < 0 ? <Bdg type="danger">−{fh(-row.hours)}</Bdg>
                       : <span className="muted">—</span>}
                   </td>
-                  <td className="mono" style={{ fontWeight: 500 }}>{row.balance < 0 ? `−${fh(-row.balance)}` : fh(row.balance)}</td>
+                  <td className="mono" style={{ fontWeight: 500 }}>{fhSigned(row.balance)}</td>
                 </tr>
               ))}
             </tbody>
@@ -181,7 +181,7 @@ export const HourBank = React.memo(function HourBank({ bankClosures: allClosures
               <tr style={{ borderTop: "1px solid var(--color-border-secondary)" }}>
                 <td style={{ fontWeight: 500, fontSize: 12 }}>Balance</td>
                 <td colSpan={2} />
-                <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-bank)" }}>{fh(balance)}</td>
+                <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-bank)" }}>{fhSigned(balance)}</td>
               </tr>
             </tfoot>
           </table>

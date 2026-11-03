@@ -12,6 +12,11 @@ export function fh(h: number): string {
   return `${hrs}h ${String(mins).padStart(2, "0")}m`;
 }
 
+// Like fh, but keeps the sign — for balances that can go negative (Hour Bank).
+export function fhSigned(h: number): string {
+  return h < 0 ? `−${fh(-h)}` : fh(h);
+}
+
 export function fc(n: number): string {
   return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n || 0);
 }
