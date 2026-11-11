@@ -94,25 +94,6 @@ export function processEntriesWithHistory(
     result.push(...processEntries(groupEntries, r.tfnLimit, r.tfnRate, r.overtimeThreshold, r.excessMode, r.limitPeriod, endedBefore));
   }
 
-  // Bank weeks closed before short weeks were deducted from the bank froze
-  // their hours without the shortfall. Keep those weeks as they were closed
-  // so reports agree with the frozen closure: drop a shortfall the closure
-  // doesn't include.
-  const closureByWeek = new Map(bankClosures.filter(c => c.mode === "bank").map(c => [c.weekStart, c]));
-  const weekSums = new Map<string, number>();
-  for (const e of result) {
-    const ws = weekStart(e.date);
-    if (closureByWeek.has(ws)) weekSums.set(ws, (weekSums.get(ws) ?? 0) + e.bankHours);
-  }
-  for (let i = 0; i < result.length; i++) {
-    const e = result[i];
-    if (e.bankHours >= 0) continue;
-    const ws = weekStart(e.date);
-    const c = closureByWeek.get(ws);
-    if (!c) continue;
-    const missing = c.hours - (weekSums.get(ws) ?? 0);
-    if (Math.abs(missing + e.bankHours) < 1e-6) result[i] = { ...e, bankHours: 0 };
-  }
   return result;
 }
 
