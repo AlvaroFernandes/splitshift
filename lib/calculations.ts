@@ -1,4 +1,5 @@
 import type { Entry, ProcessedEntry } from "@/types";
+import { todayStr } from "./formatters";
 
 export const MIN_HOURS = 4;
 
@@ -43,6 +44,15 @@ export function budgetPeriod(dateStr: string, period: LimitPeriod): string {
   return period === "month" ? dateStr.slice(0, 7) : weekStart(dateStr);
 }
 
+// Last day of a TFN budget period: the Sunday of a week, or the last day of
+// a calendar month.
+export function budgetPeriodEnd(dateStr: string, period: LimitPeriod): string {
+  if (period === "week") return weekEnd(weekStart(dateStr));
+  const [y, m] = dateStr.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate(); // day 0 of next month
+  return `${dateStr.slice(0, 7)}-${String(last).padStart(2, "0")}`;
+}
+
 // Sunday closing a week that started on `weekStartStr` (Monday)
 export function weekEnd(weekStartStr: string): string {
   const d = new Date(weekStartStr + "T12:00:00");
@@ -69,6 +79,12 @@ export function weekEnd(weekStartStr: string): string {
  *     is added to the last TFN entry of that week so all sums remain consistent.
  *
  * The intersection produces four buckets per entry: rTFN, otTFN, rABN, otABN.
+ *
+ * Hour Bank shortfall: in "bank" mode, a period whose weighted TFN hours fall
+ * short of tfnLimit draws the missing hours from the bank — the shortfall is
+ * recorded as negative bankHours on the period's last entry. It only applies
+ * once the period is over (its last day is before `endedBefore`, today by
+ * default), so a week still in progress isn't shown as owing hours.
  */
 export function processEntries(
   entries: Entry[],
@@ -77,6 +93,7 @@ export function processEntries(
   overtimeThreshold = 12,
   excessMode: "abn" | "bank" = "abn",
   limitPeriod: LimitPeriod = "week",
+  endedBefore: string = todayStr(),
 ): ProcessedEntry[] {
   const sorted = [...entries].sort((a, b) => {
     const d = a.date.localeCompare(b.date);
@@ -163,6 +180,26 @@ export function processEntries(
           const e = processed[lastTfnIdx];
           processed[lastTfnIdx] = { ...e, tfnEarnings: e.tfnEarnings + adj, totalEarnings: e.totalEarnings + adj };
         }
+      }
+    }
+  }
+
+  // Hour Bank shortfall: hours missing from a finished period come out of
+  // the bank, booked on the period's last entry.
+  if (excessMode === "bank" && tfnLimit > 0) {
+    const lastIdx = new Map<string, number>();
+    const weighted = new Map<string, number>();
+    for (let i = 0; i < processed.length; i++) {
+      const e = processed[i];
+      const p = budgetPeriod(e.date, limitPeriod);
+      lastIdx.set(p, i);
+      weighted.set(p, (weighted.get(p) ?? 0) + e.rTFN + e.otTFN * 1.5);
+    }
+    for (const [p, i] of lastIdx) {
+      if (budgetPeriodEnd(processed[i].date, limitPeriod) >= endedBefore) continue;
+      const shortfall = tfnLimit - (weighted.get(p) ?? 0);
+      if (shortfall > 1e-9) {
+        processed[i] = { ...processed[i], bankHours: processed[i].bankHours - shortfall };
       }
     }
   }

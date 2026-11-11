@@ -1,7 +1,7 @@
 import React from "react";
 import type { ManagedUser, ProcessedEntry, SavedInvoice, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
-import { fh, fc, fd, fdInv, downloadPdf } from "@/lib/formatters";
+import { fh, fhSigned, fc, fd, fdInv, downloadPdf } from "@/lib/formatters";
 import { weekStart, weekEnd, leaveAccrued, LEAVE_DAY_HOURS } from "@/lib/calculations";
 import { weekModeMap } from "@/lib/historicalProcessing";
 import { estimateNetForPeriod } from "@/lib/tax";
@@ -106,7 +106,7 @@ function WeekTimesheetDoc({ week, settings }: { week: WeekSummary; settings: Set
         {week.tfnHours > 0 && <div className="inv-totals-line"><span style={{ color: "#16a34a" }}>TFN hours</span><span>{week.tfnHours.toFixed(2)}</span></div>}
         {isBank ? (
           <>
-            {week.bankHours > 0 && <div className="inv-totals-line"><span style={{ color: "#7c3aed" }}>Banked hours</span><span>{week.bankHours.toFixed(2)}</span></div>}
+            {week.bankHours !== 0 && <div className="inv-totals-line"><span style={{ color: "#7c3aed" }}>{week.bankHours < 0 ? "Short — taken from bank" : "Banked hours"}</span><span>{week.bankHours.toFixed(2)}</span></div>}
             <div className="inv-totals-line"><span style={{ color: "#7c3aed" }}>Accumulated bank</span><span>{week.accumulated.toFixed(2)}</span></div>
           </>
         ) : (
@@ -441,7 +441,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                   {!hideMoney && <td className="mono" style={{ color: "var(--color-text-success)" }}>{fc(w.tfnEarnings)}</td>}
                   {!hideMoney && <td className="mono muted">{w.tfnEarnings > 0 ? fc(w.tfnNetEstimate) : <span className="muted">—</span>}</td>}
                   {!hideMoney && <td className="mono" style={{ color: "var(--color-text-info)" }}>{w.abnEarnings > 0 ? fc(w.abnEarnings) : <span className="muted">—</span>}</td>}
-                  <td className="mono" style={{ color: "var(--color-text-bank)" }}>{(w.bankHours > 0 || w.accumulated > 0) ? fh(w.accumulated) : <span className="muted">—</span>}</td>
+                  <td className="mono" style={{ color: "var(--color-text-bank)" }}>{(w.bankHours !== 0 || w.accumulated !== 0) ? fhSigned(w.accumulated) : <span className="muted">—</span>}</td>
                   {isAdmin && <td className="mono">{w.leave > 0 ? `+${fh(w.leave)}` : <span className="muted">—</span>}</td>}
                   {!hideMoney && <td className="mono" style={{ fontWeight: 500 }}>{fc(w.total)}</td>}
                   <td>
@@ -550,7 +550,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
               {!hideMoney && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-success)" }}>{fc(grandTotal.tfnEarnings)}</td>}
               {!hideMoney && <td className="mono muted" style={{ fontWeight: 500 }}>{fc(grandTotal.tfnNetEstimate)}</td>}
               {!hideMoney && <td className="mono" style={{ fontWeight: 500, color: "var(--color-text-info)" }}>{fc(grandTotal.abnEarnings)}</td>}
-              <td className="mono" style={{ fontWeight: 600, color: "var(--color-text-bank)" }}>{grandTotal.bankHours > 0 ? fh(grandTotal.accumulated) : <span className="muted">—</span>}</td>
+              <td className="mono" style={{ fontWeight: 600, color: "var(--color-text-bank)" }}>{grandTotal.bankHours !== 0 ? fhSigned(grandTotal.accumulated) : <span className="muted">—</span>}</td>
               {isAdmin && <td className="mono" style={{ fontWeight: 600 }}>{grandTotal.leave > 0 ? fh(grandTotal.leave) : <span className="muted">—</span>}</td>}
               {!hideMoney && <td className="mono" style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-primary)" }}>{fc(grandTotal.total)}</td>}
               <td />

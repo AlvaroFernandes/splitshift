@@ -55,6 +55,7 @@ Single-page app built with Next.js 16 App Router. Auth is handled server-side in
 Entries are sorted chronologically, then processed in a single pass with two independent splits:
 - **Overtime** — hours beyond `overtimeThreshold` in a single entry → rate ×1.5
 - **TFN/ABN** — first `tfnLimit` cumulative hours → TFN salary; excess → ABN invoice (per Mon–Sun week, or per calendar month for Hour Bank workers with `limitPeriod: "month"` — see `limitPeriodOf`)
+- **Hour Bank shortfall** — for `excessMode: "bank"`, a finished period whose weighted TFN hours fall short of `tfnLimit` books the shortfall as negative `bankHours` on its last entry (`endedBefore` param; `closeWeek` treats the closed week as ended). Bank weeks closed before this rule keep their frozen hours (`processEntriesWithHistory` drops the shortfall to match the closure)
 
 The intersection produces four buckets per entry: `rTFN`, `otTFN`, `rABN`, `otABN`. Sequential order matters because TFN/ABN allocation is cumulative across the period.
 

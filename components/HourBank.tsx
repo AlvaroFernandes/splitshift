@@ -129,23 +129,23 @@ export const HourBank = React.memo(function HourBank({ bankClosures: allClosures
 
       <div className="metric-grid mt-3">
         <Metric label="Bank balance"     value={fhSigned(balance)}      sub="accrued, all time"                        bold />
-        <Metric label="This period"      value={fh(periodBanked)} sub="banked in current period"                 color="info" />
-        <Metric label="This week"        value={fh(thisWeekPending)} sub="pending — week not yet closed"         color="info" />
+        <Metric label="This period"      value={fhSigned(periodBanked)} sub="banked in current period"                 color="info" />
+        <Metric label="This week"        value={fhSigned(thisWeekPending)} sub="pending — week not yet closed"         color="info" />
         <Metric label="Paid out"         value={fh(paidOut)}      sub="banked hours paid by your admin"           />
       </div>
 
       {statement.length === 0 ? (
         <div className="empty-state mt-4">
           <i className="ti ti-clock-dollar" aria-hidden="true" style={{ fontSize: 36, color: "var(--color-text-tertiary)" }} />
-          <p>No hours banked yet</p>
+          <p>No Hour Bank activity yet</p>
           <p className="muted" style={{ fontSize: 12 }}>
-            Hours above your {fh(settings.tfnLimit)} {limitPeriodOf(settings) === "month" ? "monthly" : "weekly"} limit are added to your bank.
+            Hours above your {fh(settings.tfnLimit)} {limitPeriodOf(settings) === "month" ? "monthly" : "weekly"} limit are added to your bank; hours short of it are taken out.
           </p>
         </div>
       ) : (
         <div className="card mt-3" style={{ overflowX: "auto" }}>
           <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>
-            Statement — balance carries forward. Hours above your {fh(settings.tfnLimit)} {limitPeriodOf(settings) === "month" ? "monthly" : "weekly"} limit are banked.
+            Statement — balance carries forward. Hours above your {fh(settings.tfnLimit)} {limitPeriodOf(settings) === "month" ? "monthly" : "weekly"} limit are banked; hours short of it are taken out of the bank.
           </p>
           <table className="data-table">
             <thead>

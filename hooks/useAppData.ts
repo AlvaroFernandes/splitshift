@@ -828,8 +828,16 @@ export function useAppData() {
   // have no invoice flow at all — their excess hours just accrue in the bank,
   // so a week with bank hours is still closeable.
   const closeWeek = useCallback(async (ws: string) => {
-    const weekEntries = weeklyData.filter(e => weekStart(e.date) === ws);
     const isBank  = settings.excessMode === "bank";
+    // Hour Bank: the week is over once it's closed, so book any shortfall
+    // (hours short of the TFN limit come out of the bank) even if it's
+    // closed before Sunday.
+    const dayAfter = new Date(weekEnd(ws) + "T12:00:00");
+    dayAfter.setDate(dayAfter.getDate() + 1);
+    const weekEntries = (isBank
+      ? processEntriesWithHistory(entries, settings, invoiceHistory, bankClosures, dayAfter.toISOString().slice(0, 10))
+      : weeklyData
+    ).filter(e => weekStart(e.date) === ws);
     const exceeded = !isBank && weekEntries.some(e => e.abnPortion > 0);
     if (exceeded) { showToast("This week has hours over the limit — invoice required", "err"); return; }
 
@@ -856,9 +864,9 @@ export function useAppData() {
       if (closure) setBankClosures(prev => [closure, ...prev.filter(c => c.weekStart !== ws)]);
     }
     setEntries(prev => prev.map(e => toCloseIds.includes(e.id) ? { ...e, archived: true } : e));
-    showToast(isBank ? "Week closed — hours banked" : "Week closed — no invoice needed");
+    showToast(isBank ? "Week closed — Hour Bank updated" : "Week closed — no invoice needed");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyData, userId, settings.excessMode, settings.tfnLimit, settings.tfnRate, settings.overtimeThreshold, settings.limitPeriod]); // supabase/showToast/setters stable
+  }, [weeklyData, entries, settings, invoiceHistory, bankClosures, userId]); // supabase/showToast/setters stable
 
   // Admin records a change to a worker's Hour Bank balance — usually that
   // `hours` banked hours were paid out (negative), or a correction (positive).

@@ -30,7 +30,7 @@ function downloadEntriesCSV(rows: ProcessedEntry[], userMap: Map<string, string>
     e.total.toFixed(2),
     money(e, e.hourlyRate),
     e.tfnPortion.toFixed(2),
-    (e.abnPortion - e.bankHours).toFixed(2),
+    (e.abnPortion - Math.max(0, e.bankHours)).toFixed(2),
     e.bankHours.toFixed(2),
     e.overtime.toFixed(2),
     money(e, e.tfnEarnings),
@@ -236,6 +236,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
                     <td style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
                       {e.tfnPortion > 0 && <Bdg type="tfn">TFN {fh(e.tfnPortion)}</Bdg>}
                       {e.bankHours  > 0 && <Bdg type="bank">Bank {fh(e.bankHours)}</Bdg>}
+                      {e.bankHours  < 0 && <Bdg type="danger">Bank −{fh(-e.bankHours)}</Bdg>}
                       {e.abnPortion > 0 && e.bankHours === 0 && <Bdg type="abn">ABN {fh(e.abnPortion)}</Bdg>}
                       {e.overtime    > 0 && <Bdg type="ot">OT {fh(e.overtime)}</Bdg>}
                     </td>

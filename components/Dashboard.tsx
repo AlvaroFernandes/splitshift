@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import type { ManagedUser, ProcessedEntry, SavedInvoice, Settings, Totals } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
 import type { BankAdjustment } from "@/services/bankAdjustments";
-import { fh, fc, fd } from "@/lib/formatters";
+import { fh, fhSigned, fc, fd } from "@/lib/formatters";
 import { limitPeriodOf } from "@/lib/calculations";
 import { Metric, Bdg } from "./ui";
 import { EarningsChart } from "./EarningsChart";
@@ -221,7 +221,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
         <Metric label="Total hours"  value={fh(totals.hours)}    sub={`${processed.length} entries`}    />
         {settings.tfnLimit !== 0 && <Metric label="TFN hours"    value={fh(totals.tfnHours)} sub={`${settings.tfnLimit}h ${limitPeriodOf(settings) === "month" ? "monthly" : "weekly"} limit`} color="success" />}
         {settings.excessMode === "bank"
-          ? <Metric label="Hour bank"  value={fh(totals.bankHours)} sub="accrued, not invoiced" color="info" />
+          ? <Metric label="Hour bank"  value={fhSigned(totals.bankHours)} sub="banked, less short weeks" color="info" />
           : <Metric label="ABN hours"  value={fh(totals.abnHours)}  sub="invoiceable excess"    color="info" />
         }
         <Metric label="Overtime"     value={fh(totals.otHours)}  sub="×1.5 rate applied"               color="warning" />
@@ -271,7 +271,7 @@ export const Dashboard = React.memo(function Dashboard({ totals, settings, proce
                       <td className="mono">{fh(d.h)}</td>
                       <td>{d.ot  > 0 ? <Bdg type="ot">{fh(d.ot)}</Bdg>       : <span className="muted">—</span>}</td>
                       <td>{d.tfn > 0 ? <Bdg type="tfn">{fh(d.tfn)}</Bdg>     : <span className="muted">—</span>}</td>
-                      <td>{d.abn > 0 ? <Bdg type={abnType}>{fh(d.abn)}</Bdg> : <span className="muted">—</span>}</td>
+                      <td>{d.abn > 0 ? <Bdg type={abnType}>{fh(d.abn)}</Bdg> : d.abn < 0 ? <Bdg type="danger">−{fh(-d.abn)}</Bdg> : <span className="muted">—</span>}</td>
                       {!hoursOnly && <td className="mono">{fc(d.earn)}</td>}
                     </tr>
                   );
