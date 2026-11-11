@@ -48,6 +48,7 @@ Single-page app built with Next.js 16 App Router. Auth is handled server-side in
 | `AdminEditModal.tsx` | Overlay form for admin editing a worker's entry |
 | `SettingsPage.tsx` | Tabbed settings form (Personal, Company, Payment) |
 | `TeamPage.tsx` | Admin Team tab: invites, per-worker work rules, edit details, remove/restore access |
+| `NotificationsMenu.tsx` | Header bell (workers only): derived to-dos — logging reminder, finished weeks still open (close / invoice) |
 | `ui.tsx` | `Metric` card and `Bdg` (TFN/ABN/OT) badge primitives |
 
 **Calculation engine (`processEntries` in `lib/calculations.ts`):**

@@ -90,6 +90,19 @@
 .logo{display:flex;align-items:center;gap:8px;margin-right:auto;font-size:15px;font-weight:500;white-space:nowrap;color:var(--color-text-primary)}
 .icon-btn{background:none;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);color:var(--color-text-secondary);cursor:pointer;padding:6px 8px;font-size:16px;line-height:1;transition:background 0.15s}
 .icon-btn:hover{background:var(--color-background-secondary);color:var(--color-text-primary)}
+.notif{position:relative}
+.notif-btn{position:relative}
+.notif-count{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--color-text-danger);color:#fff;font-size:10px;font-weight:600;line-height:17px;text-align:center}
+.notif-panel{position:absolute;right:0;top:calc(100% + 8px);width:360px;max-width:calc(100vw - 32px);background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:200;overflow:hidden}
+.notif-head{padding:10px 14px;font-size:13px;font-weight:600;border-bottom:0.5px solid var(--color-border-tertiary)}
+.notif-list{list-style:none;margin:0;padding:0;max-height:60vh;overflow-y:auto}
+.notif-item{display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:13px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.notif-item:last-child{border-bottom:none}
+.notif-item>.ti{font-size:16px;color:var(--color-text-warning);flex-shrink:0}
+.notif-text{flex:1;color:var(--color-text-secondary);line-height:1.4}
+.notif-action{font-size:12px;padding:4px 10px;white-space:nowrap}
+.notif-empty{display:flex;align-items:center;gap:8px;padding:16px 14px;font-size:13px;color:var(--color-text-secondary)}
+.notif-empty .ti{font-size:16px;color:var(--color-text-success)}
 .tabbar{background:var(--color-background-primary);border-bottom:0.5px solid var(--color-border-tertiary);display:flex;padding:0 12px;overflow-x:auto}
 .tab-btn{background:none;border:none;border-bottom:2px solid transparent;color:var(--color-text-secondary);cursor:pointer;font-size:13px;font-weight:400;padding:11px 14px;display:flex;align-items:center;gap:6px;transition:all 0.15s;white-space:nowrap}
 .tab-btn .ti{font-size:15px}

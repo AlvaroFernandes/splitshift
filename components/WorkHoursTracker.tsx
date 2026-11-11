@@ -17,6 +17,7 @@ import { SettingsPage }      from "./SettingsPage";
 import { OnboardingWizard }  from "./OnboardingWizard";
 import { ActivityLog }       from "./ActivityLog";
 import { TeamPage }          from "./TeamPage";
+import { NotificationsMenu, closeWeekNotifications, type AppNotification } from "./NotificationsMenu";
 
 export default function WorkHoursTracker() {
   const {
@@ -46,7 +47,8 @@ export default function WorkHoursTracker() {
     workerSettings, managedAdmins, clients,
     advanceInvoice, closeWeek, addBankAdjustment, removeBankAdjustment, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
-    showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
+    showReminder, reminderDaysSince,
+    openPastWeeks,
     showOnboarding, handleCompleteOnboarding,
     managedViewers, auditLog, adminCompanyInfo,
     teamView, teamWeeklyData, teamInvoices, teamIsHoursOnly,
@@ -57,6 +59,16 @@ export default function WorkHoursTracker() {
     () => new Map(teamInvoices.map(t => [t.inv.id, t.workerName])),
     [teamInvoices],
   );
+
+  const notifications = React.useMemo<AppNotification[]>(() => [
+    ...(showReminder ? [{
+      key: "log", icon: "ti-clock-edit", tab: "log", action: "Log hours",
+      text: reminderDaysSince < 0
+        ? "You haven't logged any hours yet"
+        : `You haven't logged hours in ${reminderDaysSince} day${reminderDaysSince !== 1 ? "s" : ""}`,
+    }] : []),
+    ...closeWeekNotifications(openPastWeeks),
+  ], [showReminder, reminderDaysSince, openPastWeeks]);
 
   if (loading) {
     return (
@@ -83,6 +95,7 @@ export default function WorkHoursTracker() {
             </span>
           )}
         </div>
+        {userRole === "user" && <NotificationsMenu items={notifications} onNavigate={setTab} />}
         <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
           <i className={`ti ${theme === "dark" ? "ti-sun" : "ti-moon"}`} aria-hidden="true" />
         </button>
@@ -104,32 +117,6 @@ export default function WorkHoursTracker() {
           </button>
         ))}
       </nav>
-
-      {showReminder && !reminderDismissed && (
-        <div className="no-print" role="status" style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "10px 16px",
-          background: "var(--color-background-secondary)",
-          borderLeft: "3px solid var(--color-text-warning)",
-          margin: "0 12px 0",
-          borderRadius: "var(--border-radius-md)",
-          fontSize: 13,
-        }}>
-          <i className="ti ti-bell-ringing" aria-hidden="true" style={{ color: "var(--color-text-warning)", fontSize: 16, flexShrink: 0 }} />
-          <span style={{ flex: 1, color: "var(--color-text-secondary)" }}>
-            {reminderDaysSince < 0
-              ? "You haven't logged any hours yet. Start tracking your time!"
-              : `You haven't logged hours in ${reminderDaysSince} day${reminderDaysSince !== 1 ? "s" : ""}. Don't forget to track your time!`}
-          </span>
-          <button className="btn-secondary" onClick={() => { dismissReminder(); setTab("log"); }}
-            style={{ fontSize: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
-            Log now
-          </button>
-          <button className="icon-btn-sm" onClick={dismissReminder} aria-label="Dismiss reminder">
-            <i className="ti ti-x" aria-hidden="true" />
-          </button>
-        </div>
-      )}
 
       <main className="main-content">
         {tab === "dashboard" && (

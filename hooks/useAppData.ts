@@ -109,7 +109,6 @@ export function useAppData() {
   const [invoiceHistoryByWorker, setInvoiceHistoryByWorker] = useState<Record<string, SavedInvoice[]>>({});
   const [bankClosuresByWorker,   setBankClosuresByWorker]   = useState<Record<string, BankClosure[]>>({});
   const [bankAdjustmentsByWorker, setBankAdjustmentsByWorker] = useState<Record<string, BankAdjustment[]>>({});
-  const [reminderDismissed,  setReminderDismissed]  = useState(false);
   const [auditLog,           setAuditLog]           = useState<AuditEntry[]>([]);
   // Workers with accountant access: a read-only copy of the whole team's data
   // for the Team Report / Team Invoices tabs. Null for everyone else.
@@ -903,7 +902,6 @@ export function useAppData() {
     setEditId(null);
   }, []); // all stable setters
 
-  const dismissReminder = useCallback(() => setReminderDismissed(true), []);
 
   // Saves before closing the wizard: if the save fails the wizard stays open
   // with the user's answers, instead of closing and silently losing them.
@@ -935,6 +933,23 @@ export function useAppData() {
       : Infinity;
     return { showReminder: daysSince >= threshold, reminderDaysSince: isFinite(daysSince) ? daysSince : -1 };
   }, [entries, settings.reminderEnabled, settings.reminderDays, userRole, loading]);
+
+  // Finished Mon–Sun weeks that still have open (unclosed) entries — the
+  // worker has logged them but hasn't closed the week. ABN workers whose week
+  // went over the limit close it by invoicing instead.
+  const openPastWeeks = useMemo(() => {
+    if (userRole !== "user" || loading) return [];
+    const today = todayStr();
+    const isBank = settings.excessMode === "bank";
+    const weeks = new Map<string, boolean>(); // week start → needs an invoice
+    for (const e of weeklyData) {
+      if (e.archived) continue;
+      const ws = weekStart(e.date);
+      if (weekEnd(ws) >= today) continue;
+      weeks.set(ws, (weeks.get(ws) ?? false) || (!isBank && e.abnPortion > 0));
+    }
+    return [...weeks].sort(([a], [b]) => a.localeCompare(b)).map(([ws, needsInvoice]) => ({ ws, needsInvoice }));
+  }, [weeklyData, settings.excessMode, userRole, loading]);
 
   const handleSaveTemplate = useCallback((formData: FormState) => {
     if (!formData.jobDescription.trim()) { showToast("Add a job description first", "err"); return; }
@@ -1045,7 +1060,8 @@ export function useAppData() {
     workerSettings, managedAdmins, clients,
     advanceInvoice, closeWeek, addBankAdjustment, removeBankAdjustment, handleDeleteInvoice, handleShareInvoice, handleUpdateInvoice, handleCancelEdit,
     updateInvoiceItems, handleSaveTemplate,
-    showReminder, reminderDaysSince, dismissReminder, reminderDismissed,
+    showReminder, reminderDaysSince,
+    openPastWeeks,
     showOnboarding: !loading && !settings.onboardingCompleted &&
       ((userRole === "user" && !settings.yourName) || userRole === "admin"),
     managedViewers,
