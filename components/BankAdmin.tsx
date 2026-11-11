@@ -88,8 +88,8 @@ export const BankAdmin = React.memo(function BankAdmin({ users, workerSettings, 
         <div className="field full">
           <label htmlFor="ba-dir">Type</label>
           <select id="ba-dir" value={direction} onChange={e => setDirection(e.target.value as "payout" | "add")}>
-            <option value="payout">Hours paid out (deduct from bank)</option>
             <option value="add">Add hours (correction)</option>
+            <option value="payout">Hours paid out (deduct from bank)</option>
           </select>
         </div>
         <div className="field">

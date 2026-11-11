@@ -1,7 +1,7 @@
 import React from "react";
 import type { Entry, EntryTemplate, FormState, Settings } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
-import { fh, fc, todayStr } from "@/lib/formatters";
+import { fh, fc, todayStr, alpha } from "@/lib/formatters";
 
 const OFFICE_JOB_DESCRIPTION = "Office hours";
 // Office-hours shifts are worked for Hands On itself, not an external client.
@@ -194,7 +194,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
                 <input id="f-client" type="text" list="f-client-list" placeholder="e.g. Acme Corp" value={form.client} onChange={e => f("client", e.target.value)} />
                 {clients && clients.length > 0 && (
                   <datalist id="f-client-list">
-                    {clients.map(c => <option key={c} value={c} />)}
+                    {[...clients].sort(alpha).map(c => <option key={c} value={c} />)}
                   </datalist>
                 )}
               </div>

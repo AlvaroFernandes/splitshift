@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import type { Entry, FormState } from "@/types";
 import { calcHours, MIN_HOURS } from "@/lib/calculations";
-import { fh, fc } from "@/lib/formatters";
+import { fh, fc, alpha } from "@/lib/formatters";
 
 export const AdminEditModal = React.memo(function AdminEditModal({ entry, userName, onSave, onClose, clients, hideMoney }: {
   entry: Entry;
@@ -97,7 +97,7 @@ export const AdminEditModal = React.memo(function AdminEditModal({ entry, userNa
             <input type="text" list="am-client-list" placeholder="e.g. Acme Corp" value={form.client} onChange={e => f("client", e.target.value)} />
             {clients && clients.length > 0 && (
               <datalist id="am-client-list">
-                {clients.map(c => <option key={c} value={c} />)}
+                {[...clients].sort(alpha).map(c => <option key={c} value={c} />)}
               </datalist>
             )}
           </div>

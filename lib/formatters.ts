@@ -36,6 +36,11 @@ export function fdInv(d: string): string {
   return `${day}/${m}/${y}`;
 }
 
+// Case-insensitive A→Z comparison for dropdown labels.
+export function alpha(a: string, b: string): number {
+  return a.localeCompare(b, "en-AU", { sensitivity: "base" });
+}
+
 export function todayStr(): string {
   const d = new Date();
   const y = d.getFullYear();

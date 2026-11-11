@@ -277,8 +277,8 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
             onChange={e => setArrangement(u.id, e.target.value as Arrangement)}
             aria-label={`Excess hours mode for ${u.name}`}>
             <option value="abn">ABN Invoice</option>
-            <option value="bank">Hour Bank</option>
             <option value="abnOnly">ABN only (no TFN)</option>
+            <option value="bank">Hour Bank</option>
           </select>
         </td>
         <td>
@@ -286,8 +286,8 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
             <select value={r.workerType} disabled={off} style={ruleSelectStyle}
               onChange={e => setRule(u.id, "workerType", e.target.value as "office" | "site")}
               aria-label={`Worker type for ${u.name}`}>
-              <option value="site">Site</option>
               <option value="office">Office</option>
+              <option value="site">Site</option>
             </select>
           ) : <span className="muted">—</span>}
         </td>
@@ -396,9 +396,9 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
           <input type="text" placeholder="Name" value={inviteName} onChange={e => setInviteName(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
           <input type="email" required placeholder="Email address" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
           <select value={inviteRole} onChange={e => setInviteRole(e.target.value as Role)} style={selectStyle} aria-label="Role">
-            <option value="user">Worker</option>
             <option value="admin">Admin</option>
             <option value="viewer">Viewer (accountant)</option>
+            <option value="user">Worker</option>
           </select>
           <button type="submit" className="btn-primary" disabled={inviteSending}>
             <i className="ti ti-send" aria-hidden="true" />

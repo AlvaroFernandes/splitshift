@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import type { ManagedUser, ProcessedEntry } from "@/types";
-import { fh, fc, fd } from "@/lib/formatters";
+import { fh, fc, fd, alpha } from "@/lib/formatters";
 import { Bdg } from "./ui";
 
 function csvEsc(v: string | number): string {
@@ -80,7 +80,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
   }, [processed, archivedProcessed, showInvoiced]);
 
   const clientOptions = useMemo(() =>
-    [...new Set(combined.map(e => e.client).filter(Boolean))].sort() as string[],
+    ([...new Set(combined.map(e => e.client).filter(Boolean))] as string[]).sort(alpha),
   [combined]);
 
   const visible = useMemo(() => {
@@ -131,7 +131,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
                 style={{ fontSize: 13, padding: "4px 8px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-secondary)", color: "var(--color-text-primary)" }}
               >
                 <option value="all">All users</option>
-                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {[...users].sort((a, b) => alpha(a.name, b.name)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
           )}

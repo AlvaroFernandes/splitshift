@@ -1,7 +1,7 @@
 import React from "react";
 import type { ManagedUser, ProcessedEntry, SavedInvoice, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
-import { fh, fhSigned, fc, fd, fdInv, downloadPdf } from "@/lib/formatters";
+import { fh, fhSigned, fc, fd, fdInv, downloadPdf, alpha } from "@/lib/formatters";
 import { weekStart, weekEnd, leaveAccrued, LEAVE_DAY_HOURS } from "@/lib/calculations";
 import { weekModeMap } from "@/lib/historicalProcessing";
 import { estimateNetForPeriod } from "@/lib/tax";
@@ -581,7 +581,7 @@ function WorkerFilter({ users, value, onChange }: { users: ManagedUser[]; value:
         aria-label="Filter by worker"
       >
         <option value="all">All workers</option>
-        {users.map(u => (
+        {[...users].sort((a, b) => alpha(a.name || a.email, b.name || b.email)).map(u => (
           <option key={u.id} value={u.id}>{u.name || u.email}</option>
         ))}
       </select>
