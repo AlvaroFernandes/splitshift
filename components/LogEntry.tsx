@@ -13,6 +13,9 @@ const BREAK_OPTIONS = [
   { value: "45", label: "45 min" },
   { value: "60", label: "1 hour" },
 ];
+const OTHER_BREAK = "other";
+const isPresetBreak = (mins: string) =>
+  BREAK_OPTIONS.some(o => o.value === String(parseInt(mins || "0") || 0));
 
 export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCancel, clients, templates, onSaveTemplate, settings }: {
   editEntry?: Entry | null;
@@ -51,22 +54,41 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
   );
 
   const { breakMinsNum, previewRaw, previewActual, previewH, previewEarn } = React.useMemo(() => {
-    const breakMinsNum  = parseInt(form.breakMins || "0") || 0;
+    const breakMinsNum  = Math.max(0, parseInt(form.breakMins || "0") || 0);
     const previewRaw    = calcHours(form.startTime, form.endTime);
     const previewActual = Math.max(0, previewRaw - breakMinsNum / 60);
     const previewH      = form.officeHours ? previewActual : Math.max(MIN_HOURS, previewActual);
     return { breakMinsNum, previewRaw, previewActual, previewH, previewEarn: previewH * parseFloat(form.hourlyRate || "0") };
   }, [form.breakMins, form.startTime, form.endTime, form.hourlyRate, form.officeHours]);
 
-  // An entry saved before the break became a fixed choice may hold another
-  // value — keep it selectable so editing that entry doesn't silently change it.
-  const breakOptions = React.useMemo(() => {
-    const current = String(parseInt(form.breakMins || "0") || 0);
-    return BREAK_OPTIONS.some(o => o.value === current)
-      ? BREAK_OPTIONS
-      : [...BREAK_OPTIONS, { value: current, label: `${current} min` }]
-          .sort((x, y) => Number(x.value) - Number(y.value));
-  }, [form.breakMins]);
+  // "Other" lets the worker type any break length. Entries saved with a
+  // non-preset length (incl. ones from before the fixed choices) open in it.
+  const [customBreak, setCustomBreak] = React.useState(() => !isPresetBreak(form.breakMins));
+  // The custom length is typed as hours + minutes; form.breakMins keeps the total.
+  const [breakHM, setBreakHM] = React.useState(() => {
+    const total = parseInt(form.breakMins || "0") || 0;
+    return !isPresetBreak(form.breakMins) && total > 0
+      ? { h: total >= 60 ? String(Math.floor(total / 60)) : "", m: total % 60 ? String(total % 60) : "" }
+      : { h: "", m: "" };
+  });
+
+  const setBreakPart = (part: "h" | "m", value: string) => {
+    const next = { ...breakHM, [part]: value };
+    setBreakHM(next);
+    const total = Math.max(0, parseInt(next.h || "0") || 0) * 60 + Math.max(0, parseInt(next.m || "0") || 0);
+    f("breakMins", total > 0 ? String(total) : "");
+  };
+
+  const onBreakSelect = (value: string) => {
+    if (value === OTHER_BREAK) {
+      setCustomBreak(true);
+      setBreakHM({ h: "", m: "" });
+      f("breakMins", "");
+    } else {
+      setCustomBreak(false);
+      f("breakMins", value === "0" ? "" : value);
+    }
+  };
 
   const f = (k: keyof FormState, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -107,6 +129,8 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
         client: !isOfficeBank && prev.officeHours ? OFFICE_CLIENT : "",
         officeHours: isOfficeBank || !!prev.officeHours,
       }));
+      setCustomBreak(false);
+      setBreakHM({ h: "", m: "" });
     }
   }, [form, onSave, editEntry, isSaving, isBank, isOfficeBank, bankRate]);
 
@@ -219,10 +243,26 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
             </div>
             <div className="field">
               <label htmlFor="f-break">Break <span className="label-hint">unpaid</span></label>
-              <select id="f-break" value={form.breakMins || "0"} onChange={e => f("breakMins", e.target.value === "0" ? "" : e.target.value)}>
-                {breakOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              <select id="f-break" value={customBreak ? OTHER_BREAK : (form.breakMins || "0")} onChange={e => onBreakSelect(e.target.value)}>
+                {BREAK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <option value={OTHER_BREAK}>Other…</option>
               </select>
             </div>
+            {customBreak && (
+              <div className="field">
+                <label htmlFor="f-break-h">Break length</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input id="f-break-h" type="number" min="0" max="23" step="1" inputMode="numeric" placeholder="0"
+                    aria-label="Break hours" style={{ width: "100%", minWidth: 0 }}
+                    autoFocus={!editEntry} value={breakHM.h} onChange={e => setBreakPart("h", e.target.value)} />
+                  <span className="muted" style={{ fontSize: 12 }}>h</span>
+                  <input id="f-break-m" type="number" min="0" max="59" step="1" inputMode="numeric" placeholder="0"
+                    aria-label="Break minutes" style={{ width: "100%", minWidth: 0 }}
+                    value={breakHM.m} onChange={e => setBreakPart("m", e.target.value)} />
+                  <span className="muted" style={{ fontSize: 12 }}>min</span>
+                </div>
+              </div>
+            )}
             {!isBank && (
               <div className="field">
                 <label htmlFor="f-rate">Hourly rate <span className="label-hint">AUD</span></label>

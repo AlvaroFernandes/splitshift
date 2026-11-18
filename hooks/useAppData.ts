@@ -360,6 +360,9 @@ export function useAppData() {
     if (calcHours(startTime, endTime) <= 0) {
       showToast("End time must be after start time", "err"); return false;
     }
+    if (breakMinsNum / 60 >= calcHours(startTime, endTime)) {
+      showToast("Break must be shorter than the shift", "err"); return false;
+    }
     const original = editId ? entries.find(e => e.id === editId) : null;
     const entry: Entry = {
       ...formData,
