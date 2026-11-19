@@ -1,5 +1,7 @@
 {
   "crons": [
-    { "path": "/api/cron/reminders", "schedule": "0 22 * * *" }
+    { "path": "/api/cron/reminders", "schedule": "0 22 * * *" },
+    { "path": "/api/cron/close-weeks", "schedule": "59 12 * * 0" },
+    { "path": "/api/cron/close-weeks", "schedule": "59 13 * * 0" }
   ]
 }
