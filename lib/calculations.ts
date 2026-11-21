@@ -1,4 +1,4 @@
-import type { Entry, ProcessedEntry } from "@/types";
+import type { Entry, LeaveType, ProcessedEntry } from "@/types";
 import { todayStr } from "./formatters";
 
 export const MIN_HOURS = 4;
@@ -11,6 +11,26 @@ export const LEAVE_DAY_HOURS = 7.6;
 
 export function leaveAccrued(e: { rTFN: number }): number {
   return e.rTFN * ANNUAL_LEAVE_RATE;
+}
+
+export const LEAVE_LABELS: Record<LeaveType, string> = {
+  annual:         "Annual leave",
+  sick:           "Sick leave",
+  public_holiday: "Public holiday",
+};
+
+// Hours one leave day is worth for a full-time worker: their weekly hours
+// ÷ 5. A monthly limit is turned into weekly hours first (× 12 ÷ 52).
+export function leaveDayHours(s: { tfnLimit?: number; excessMode?: "abn" | "bank"; limitPeriod?: LimitPeriod }): number {
+  const limit  = s.tfnLimit ?? 0;
+  const weekly = limitPeriodOf(s) === "month" ? limit * 12 / 52 : limit;
+  return weekly / 5;
+}
+
+// Leave hours as the end time of a 00:00 → end entry, rounded to the minute.
+export function leaveEndTime(hours: number): string {
+  const mins = Math.max(1, Math.min(23 * 60 + 59, Math.round(hours * 60)));
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
 }
 
 export function calcHours(start: string, end: string): number {
@@ -109,9 +129,10 @@ export function processEntries(
     if (ew !== currentWeek) { weekRun = 0; currentWeek = ew; }
 
     const worked   = calcHours(entry.startTime, entry.endTime) - (entry.breakMins || 0) / 60;
-    const total    = entry.officeHours ? Math.max(0, worked) : Math.max(MIN_HOURS, worked);
+    // Leave days are paid as logged: no minimum call and never overtime.
+    const total    = entry.officeHours || entry.leaveType ? Math.max(0, worked) : Math.max(MIN_HOURS, worked);
 
-    const regular  = Math.min(total, overtimeThreshold);
+    const regular  = entry.leaveType ? total : Math.min(total, overtimeThreshold);
     const overtime = total - regular;
 
     // Weighted cost of this entry: OT hours count 1.5× toward the TFN budget

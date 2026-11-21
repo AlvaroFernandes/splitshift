@@ -12,6 +12,7 @@ export interface WorkerRuleUpdate {
   overtimeThreshold: number;
   excessMode: "abn" | "bank";
   workerType: "office" | "site";
+  fullTime: boolean;             // Hour Bank only — leave days + empty weeks charged
 }
 
 type Rules = Omit<WorkerRuleUpdate, "userId">;
@@ -70,6 +71,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
       overtimeThreshold: ws?.overtimeThreshold ?? 12,
       excessMode:       (ws?.excessMode        ?? "abn") as "abn" | "bank",
       workerType:       (ws?.workerType        ?? "site") as "office" | "site",
+      fullTime:         ws?.excessMode === "bank" && !!ws?.fullTime,
     };
   };
   const rulesFor = (id: string): Rules => ({ ...savedRules(id), ...ruleEdits[id] });
@@ -236,6 +238,8 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
         // Monthly limits are Hour Bank only — ABN invoices are weekly.
         ...(a !== "bank" ? { limitPeriod: "week" as const } : {}),
         ...(a === "abnOnly" ? { tfnRate: "" } : {}),
+        // Full time is an Hour Bank rule only.
+        ...(a !== "bank" ? { fullTime: false } : {}),
       },
     }));
   };
@@ -283,12 +287,20 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
         </td>
         <td>
           {r.excessMode === "bank" ? (
-            <select value={r.workerType} disabled={off} style={ruleSelectStyle}
-              onChange={e => setRule(u.id, "workerType", e.target.value as "office" | "site")}
-              aria-label={`Worker type for ${u.name}`}>
-              <option value="office">Office</option>
-              <option value="site">Site</option>
-            </select>
+            <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <select value={r.workerType} disabled={off} style={ruleSelectStyle}
+                onChange={e => setRule(u.id, "workerType", e.target.value as "office" | "site")}
+                aria-label={`Worker type for ${u.name}`}>
+                <option value="office">Office</option>
+                <option value="site">Site</option>
+              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, whiteSpace: "nowrap", cursor: off ? "default" : "pointer" }}
+                title="Can log leave days. A finished week with no hours costs the whole limit.">
+                <input type="checkbox" checked={r.fullTime} disabled={off}
+                  onChange={e => setRule(u.id, "fullTime", e.target.checked)} />
+                Full time
+              </label>
+            </span>
           ) : <span className="muted">—</span>}
         </td>
       </>
@@ -316,7 +328,7 @@ export const TeamPage = React.memo(function TeamPage({ users, admins, viewers, w
         </div>
         {isWorkers && (
           <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 10 }}>
-            Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. Overtime is per shift. Hour Bank workers are either Site (full entry form) or Office (clock in/out only). ABN only workers invoice every hour (TFN limit 0). Hour Bank workers can have a weekly or a monthly limit.
+            Leave the TFN rate blank to pay TFN hours at each entry&apos;s own rate. Overtime is per shift. Hour Bank workers are either Site (full entry form) or Office (clock in/out only). ABN only workers invoice every hour (TFN limit 0). Hour Bank workers can have a weekly or a monthly limit. Full-time Hour Bank workers can log leave days (weekly hours ÷ 5), and a finished week with no hours at all costs their whole limit.
           </p>
         )}
         <table className="data-table">

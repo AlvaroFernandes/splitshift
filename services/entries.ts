@@ -14,6 +14,7 @@ export function rowToEntry(row: Record<string, unknown>): Entry {
     officeHours:    !!(row.office_hours),
     client:         (row.client as string) || undefined,
     ownerId:        row.user_id as string,
+    leaveType:      (row.leave_type as Entry["leaveType"]) || undefined,
   };
 }
 
@@ -30,6 +31,9 @@ export function entryToRow(entry: Entry, userId: string): Record<string, unknown
     archived:        entry.archived ?? false,
     office_hours:    entry.officeHours ?? false,
     client:          entry.client?.trim() || null,
+    // Only sent when set (or explicitly cleared), so saving ordinary entries
+    // never depends on the leave_type column (migration 027).
+    ...(entry.leaveType !== undefined && { leave_type: entry.leaveType }),
   };
 }
 

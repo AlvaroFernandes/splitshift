@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import type { ManagedUser, ProcessedEntry } from "@/types";
 import { fh, fc, fd, alpha } from "@/lib/formatters";
 import { Bdg } from "./ui";
+import { LEAVE_LABELS } from "@/lib/calculations";
 
 function csvEsc(v: string | number): string {
   const s = String(v);
@@ -218,7 +219,7 @@ export const EntriesList = React.memo(function EntriesList({ processed, archived
                     </td>
                   )}
                   <td className="mono" style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
-                    {e.startTime}–{e.endTime}
+                    {e.leaveType ? LEAVE_LABELS[e.leaveType] : `${e.startTime}–${e.endTime}`}
                     {e.breakMins > 0 && (
                       <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)" }}>−{e.breakMins}m</span>
                     )}

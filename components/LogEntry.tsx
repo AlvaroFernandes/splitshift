@@ -1,6 +1,6 @@
 import React from "react";
-import type { Entry, EntryTemplate, FormState, Settings } from "@/types";
-import { calcHours, MIN_HOURS } from "@/lib/calculations";
+import type { Entry, EntryTemplate, FormState, LeaveType, Settings } from "@/types";
+import { calcHours, MIN_HOURS, LEAVE_LABELS, leaveDayHours, leaveEndTime } from "@/lib/calculations";
 import { fh, fc, todayStr, alpha } from "@/lib/formatters";
 
 const OFFICE_JOB_DESCRIPTION = "Office hours";
@@ -32,6 +32,9 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
   const isBank       = settings.excessMode === "bank";
   const isOfficeBank = isBank && settings.workerType === "office";
   const bankRate     = settings.tfnRate || settings.defaultRate || "0";
+  // Full-time Hour Bank workers can log a paid day off worth weekly hours ÷ 5.
+  const leaveHours   = isBank && settings.fullTime ? leaveDayHours(settings) : 0;
+  const canLeave     = leaveHours > 0;
 
   const [form, setForm] = React.useState<FormState>(() =>
     editEntry
@@ -44,6 +47,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
           breakMins:      editEntry.breakMins ? String(editEntry.breakMins) : "",
           client:         editEntry.client ?? "",
           officeHours:    editEntry.officeHours ?? false,
+          leaveType:      editEntry.leaveType ?? "",
         }
       : {
           date: todayStr(), jobDescription: isOfficeBank ? OFFICE_JOB_DESCRIPTION : "",
@@ -103,6 +107,22 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
         : (prev.client === OFFICE_CLIENT ? "" : prev.client),
     }));
 
+  const isLeave = !!form.leaveType;
+
+  // Switching between work and a leave day swaps the fields the form needs.
+  const setLeave = (type: LeaveType | "") =>
+    setForm(prev => type
+      ? {
+          ...prev, leaveType: type, jobDescription: LEAVE_LABELS[type],
+          startTime: "00:00", endTime: leaveEndTime(leaveHours),
+          breakMins: "", client: "", officeHours: true,
+          hourlyRate: isBank ? bankRate : prev.hourlyRate,
+        }
+      : {
+          ...prev, leaveType: "", jobDescription: isOfficeBank ? OFFICE_JOB_DESCRIPTION : "",
+          startTime: "", endTime: "", client: "", officeHours: isOfficeBank,
+        });
+
   const applyTemplate = (t: EntryTemplate) => {
     setForm(prev => ({
       ...prev,
@@ -138,7 +158,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
     <div>
       <h2 className="sr-only">{editEntry ? "Edit entry" : "Log work hours"}</h2>
 
-      {!isOfficeBank && !editEntry && templates && templates.length > 0 && (
+      {!isOfficeBank && !isLeave && !editEntry && templates && templates.length > 0 && (
         <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>Quick fill:</span>
           {templates.map(t => (
@@ -181,31 +201,72 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
             </span>
           </div>
         )}
-        {!isOfficeBank && (
+        {(!isOfficeBank || canLeave) && (
           <div className="log-type">
-            <div className="seg-control" role="radiogroup" aria-label="Type of work">
-              <button type="button" role="radio" aria-checked={!form.officeHours}
-                className={`seg-option${!form.officeHours ? " active" : ""}`}
-                onClick={() => setOfficeHours(false)}>
-                <i className="ti ti-helmet" aria-hidden="true" />
-                Site work
-              </button>
-              <button type="button" role="radio" aria-checked={!!form.officeHours}
-                className={`seg-option${form.officeHours ? " active" : ""}`}
-                onClick={() => setOfficeHours(true)}>
-                <i className="ti ti-building" aria-hidden="true" />
-                Office hours
-              </button>
+            <div className="seg-control" role="radiogroup" aria-label="Type of entry">
+              {isOfficeBank ? (
+                <button type="button" role="radio" aria-checked={!isLeave}
+                  className={`seg-option${!isLeave ? " active" : ""}`}
+                  onClick={() => setLeave("")}>
+                  <i className="ti ti-clock" aria-hidden="true" />
+                  Work
+                </button>
+              ) : (
+                <>
+                  <button type="button" role="radio" aria-checked={!isLeave && !form.officeHours}
+                    className={`seg-option${!isLeave && !form.officeHours ? " active" : ""}`}
+                    onClick={() => { if (isLeave) setLeave(""); setOfficeHours(false); }}>
+                    <i className="ti ti-helmet" aria-hidden="true" />
+                    Site work
+                  </button>
+                  <button type="button" role="radio" aria-checked={!isLeave && !!form.officeHours}
+                    className={`seg-option${!isLeave && form.officeHours ? " active" : ""}`}
+                    onClick={() => { if (isLeave) setLeave(""); setOfficeHours(true); }}>
+                    <i className="ti ti-building" aria-hidden="true" />
+                    Office hours
+                  </button>
+                </>
+              )}
+              {canLeave && (
+                <button type="button" role="radio" aria-checked={isLeave}
+                  className={`seg-option${isLeave ? " active" : ""}`}
+                  onClick={() => { if (!isLeave) setLeave("annual"); }}>
+                  <i className="ti ti-beach" aria-hidden="true" />
+                  Leave
+                </button>
+              )}
             </div>
             <p className="log-type-hint">
-              {form.officeHours
-                ? "Billed as worked — no 4-hour minimum call."
-                : "4-hour minimum call applies to short shifts."}
+              {isLeave
+                ? `A paid day off — counts as ${fh(leaveHours)} toward your week.`
+                : isOfficeBank
+                  ? "Clock in and out for the day."
+                  : form.officeHours
+                    ? "Billed as worked — no 4-hour minimum call."
+                    : "4-hour minimum call applies to short shifts."}
             </p>
           </div>
         )}
 
-        {!isOfficeBank && (
+        {isLeave && (
+          <section className="form-section">
+            <p className="form-section-title">Leave</p>
+            <div className="form-grid">
+              <div className="field">
+                <label htmlFor="f-leave-date">Date</label>
+                <input id="f-leave-date" type="date" value={form.date} disabled={!!editEntry?.archived} onChange={e => f("date", e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="f-leave-type">Type</label>
+                <select id="f-leave-type" value={form.leaveType} onChange={e => setLeave(e.target.value as LeaveType)}>
+                  {(Object.keys(LEAVE_LABELS) as LeaveType[]).map(t => <option key={t} value={t}>{LEAVE_LABELS[t]}</option>)}
+                </select>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {!isOfficeBank && !isLeave && (
           <section className="form-section">
             <p className="form-section-title">Job</p>
             <div className="form-grid">
@@ -226,7 +287,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
           </section>
         )}
 
-        <section className="form-section">
+        {!isLeave && <section className="form-section">
           {!isOfficeBank && <p className="form-section-title">Time</p>}
           <div className="form-grid cols-3">
             <div className="field">
@@ -270,9 +331,9 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
               </div>
             )}
           </div>
-        </section>
+        </section>}
 
-        {previewRaw > 0 && (
+        {!isLeave && previewRaw > 0 && (
           <div className="preview-box">
             <span>
               <span className="muted">{isOfficeBank ? "Worked: " : "On site: "}</span>
@@ -313,7 +374,7 @@ export const LogEntry = React.memo(function LogEntry({ editEntry, onSave, onCanc
               <i className="ti ti-x" aria-hidden="true" />
               Cancel
             </button>
-          ) : !isOfficeBank ? (
+          ) : !isOfficeBank && !isLeave ? (
             <button className="btn-secondary" onClick={() => onSaveTemplate?.(form)} title="Save current fields as a reusable template">
               <i className="ti ti-bookmark" aria-hidden="true" />
               Save as template

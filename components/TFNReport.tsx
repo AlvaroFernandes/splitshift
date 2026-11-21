@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import type { ProcessedEntry, Totals, Settings } from "@/types";
 import { fh, fc, fd } from "@/lib/formatters";
-import { weekStart, limitPeriodOf } from "@/lib/calculations";
+import { weekStart, limitPeriodOf, LEAVE_LABELS } from "@/lib/calculations";
 import { estimateNetForPeriod } from "@/lib/tax";
 
 function weekLabel(monStr: string): string {
@@ -140,8 +140,14 @@ export const TFNReport = React.memo(function TFNReport({ processed, totals, sett
                         <td className="mono" style={{ fontSize: 12 }}>{fd(e.date)}</td>
                         <td>{e.jobDescription}</td>
                         {hasClients && <td style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{e.client ?? <span className="muted">—</span>}</td>}
-                        <td className="mono">{e.startTime}</td>
-                        <td className="mono">{e.endTime}</td>
+                        {e.leaveType ? (
+                          <td className="mono muted" colSpan={2}>{LEAVE_LABELS[e.leaveType]}</td>
+                        ) : (
+                          <>
+                            <td className="mono">{e.startTime}</td>
+                            <td className="mono">{e.endTime}</td>
+                          </>
+                        )}
                         <td className="mono">
                           {fh(e.rTFN)}
                           {e.otTFN > 0 && (

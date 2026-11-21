@@ -2,7 +2,7 @@ import React from "react";
 import type { ManagedUser, ProcessedEntry, SavedInvoice, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
 import { fh, fhSigned, fc, fd, fdInv, downloadPdf, alpha } from "@/lib/formatters";
-import { weekStart, weekEnd, leaveAccrued, LEAVE_DAY_HOURS } from "@/lib/calculations";
+import { weekStart, weekEnd, leaveAccrued, LEAVE_DAY_HOURS, LEAVE_LABELS } from "@/lib/calculations";
 import { weekModeMap } from "@/lib/historicalProcessing";
 import { estimateNetForPeriod } from "@/lib/tax";
 import { Bdg } from "./ui";
@@ -87,8 +87,14 @@ function WeekTimesheetDoc({ week, settings }: { week: WeekSummary; settings: Set
             <tr key={e.id}>
               <td style={{ whiteSpace: "nowrap" }}>{fdInv(e.date)}</td>
               <td>{e.jobDescription}</td>
-              <td>{e.startTime}</td>
-              <td>{e.endTime}</td>
+              {e.leaveType ? (
+                <td colSpan={2} style={{ color: "#666" }}>{LEAVE_LABELS[e.leaveType]}</td>
+              ) : (
+                <>
+                  <td>{e.startTime}</td>
+                  <td>{e.endTime}</td>
+                </>
+              )}
               <td style={{ textAlign: "right", color: e.breakMins > 0 ? undefined : "#999" }}>{e.breakMins > 0 ? `${e.breakMins}m` : "—"}</td>
               <td style={{ textAlign: "right", fontWeight: 600 }}>{e.total.toFixed(2)}</td>
               <td style={{ textAlign: "right", color: e.tfnPortion > 0 ? "#16a34a" : "#999" }}>{e.tfnPortion > 0 ? e.tfnPortion.toFixed(2) : "—"}</td>
@@ -296,13 +302,17 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
   // Annual leave each worker has accrued across the visible entries.
   const leaveByWorker = React.useMemo(() => {
     if (!isAdmin) return [];
-    const map = new Map<string, number>();
+    // Accrued, and annual leave days taken (they come off the balance).
+    const map = new Map<string, { hours: number; taken: number }>();
     visible.forEach(e => {
       const h = leaveAccrued(e);
-      if (h > 0) map.set(e.ownerId ?? "", (map.get(e.ownerId ?? "") ?? 0) + h);
+      const taken = e.leaveType === "annual" ? e.total : 0;
+      if (h <= 0 && taken <= 0) return;
+      const cur = map.get(e.ownerId ?? "") ?? { hours: 0, taken: 0 };
+      map.set(e.ownerId ?? "", { hours: cur.hours + h, taken: cur.taken + taken });
     });
     return [...map.entries()]
-      .map(([id, hours]) => ({ id, name: userMap.get(id) ?? "—", hours }))
+      .map(([id, v]) => ({ id, name: userMap.get(id) ?? "—", ...v }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [isAdmin, visible, userMap]);
 
@@ -372,13 +382,15 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
       {leaveByWorker.length > 0 && (
         <div className="card" style={{ overflowX: "auto", marginBottom: 16 }}>
           <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>
-            Annual leave accrued <span className="muted">· 1 hour per 13 ordinary TFN hours (4 weeks a year full-time)</span>
+            Annual leave <span className="muted">· 1 hour accrued per 13 ordinary TFN hours (4 weeks a year full-time); annual leave days taken come off the balance</span>
           </p>
           <table className="data-table">
             <thead>
               <tr>
                 <th>Worker</th>
-                <th>Hours</th>
+                <th>Accrued</th>
+                <th>Taken</th>
+                <th>Balance</th>
                 <th>Days ({LEAVE_DAY_HOURS}h)</th>
               </tr>
             </thead>
@@ -387,7 +399,9 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                 <tr key={w.id}>
                   <td style={{ fontWeight: 500 }}>{w.name}</td>
                   <td className="mono">{fh(w.hours)}</td>
-                  <td className="mono muted">{(w.hours / LEAVE_DAY_HOURS).toFixed(1)}</td>
+                  <td className="mono">{w.taken > 0 ? `−${fh(w.taken)}` : <span className="muted">—</span>}</td>
+                  <td className="mono" style={{ fontWeight: 600, color: w.hours - w.taken < 0 ? "var(--color-text-danger)" : undefined }}>{fhSigned(w.hours - w.taken)}</td>
+                  <td className="mono muted">{((w.hours - w.taken) / LEAVE_DAY_HOURS).toFixed(1)}</td>
                 </tr>
               ))}
             </tbody>
@@ -483,7 +497,7 @@ export const WeeklyReport = React.memo(function WeeklyReport({ processed, settin
                       </td>
                     )}
                     <td className="mono" style={{ fontSize: 12 }}>
-                      {e.startTime}–{e.endTime}
+                      {e.leaveType ? LEAVE_LABELS[e.leaveType] : `${e.startTime}–${e.endTime}`}
                       {e.breakMins > 0 && <span className="muted"> −{e.breakMins}m</span>}
                     </td>
                     <td className="mono" style={{ fontSize: 12 }}>

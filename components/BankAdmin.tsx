@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { ManagedUser, ProcessedEntry, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
 import type { BankAdjustment } from "@/services/bankAdjustments";
-import { fh, fhSigned, fd, todayStr } from "@/lib/formatters";
+import { fh, fhSigned, fd, todayStr, alpha } from "@/lib/formatters";
 import { bankBalance } from "@/lib/hourBank";
 import { Metric, Bdg } from "./ui";
 
@@ -42,7 +42,7 @@ export const BankAdmin = React.memo(function BankAdmin({ users, workerSettings, 
       return { ...u, ...b, paidOut, onBank, adjustments, hasHistory: closures.some(c => c.mode === "bank") || adjustments.length > 0 };
     })
     .filter(r => r.onBank || r.hasHistory)
-    .sort((a, b) => b.balance - a.balance),
+    .sort((a, b) => alpha(a.name || a.email, b.name || b.email)),
   [users, workerSettings, processed, closuresByWorker, adjustmentsByWorker]);
 
   const totalBalance = rows.reduce((s, r) => s + r.balance, 0);

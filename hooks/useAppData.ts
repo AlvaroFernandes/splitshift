@@ -364,10 +364,14 @@ export function useAppData() {
       showToast("Break must be shorter than the shift", "err"); return false;
     }
     const original = editId ? entries.find(e => e.id === editId) : null;
+    const { leaveType: formLeave, ...fields } = formData;
+    // A work entry saved over a former leave day clears its leave type.
+    const leaveType = formLeave ? formLeave : original?.leaveType ? null : undefined;
     const entry: Entry = {
-      ...formData,
+      ...fields,
       hourlyRate: hourlyRateNum,
       breakMins:  breakMinsNum,
+      ...(leaveType !== undefined && { leaveType }),
       id: editId || genId(),
       ...(original?.archived && { archived: true }),
       ...(original?.ownerId  && { ownerId: original.ownerId }),
@@ -444,7 +448,7 @@ export function useAppData() {
   }, [userId, userRole, periodStart, periodEnd]); // saveSettings/showToast/setSettings are stable
 
   const handleSaveWorkerRules = useCallback(async (
-    rules: { userId: string; tfnLimit: number; limitPeriod: "week" | "month"; tfnRate: string; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site" }[],
+    rules: { userId: string; tfnLimit: number; limitPeriod: "week" | "month"; tfnRate: string; overtimeThreshold: number; excessMode: "abn" | "bank"; workerType: "office" | "site"; fullTime: boolean }[],
   ) => {
     // Detect ABN <-> Hour Bank switches before overwriting, so they can be
     // logged individually — a generic "rules saved" entry doesn't tell an
@@ -454,7 +458,7 @@ export function useAppData() {
     // what the worker earns.
     const rateChanges: { workerId: string; workerName: string; from: string; to: string }[] = [];
     const results = await Promise.all(
-      rules.map(({ userId: wid, tfnLimit, limitPeriod, tfnRate: rawRate, overtimeThreshold, excessMode, workerType }) => {
+      rules.map(({ userId: wid, tfnLimit, limitPeriod, tfnRate: rawRate, overtimeThreshold, excessMode, workerType, fullTime: ftRaw }) => {
         const existing     = workerSettings[wid] ?? DEFAULT_SETTINGS;
         const previousMode = existing.excessMode ?? "abn";
         const workerName   = managedUsersRef.current.find(u => u.id === wid)?.name ?? "worker";
@@ -469,7 +473,10 @@ export function useAppData() {
             fromTfnLimit: existing.tfnLimit ?? 30, toTfnLimit: tfnLimit,
           });
         }
-        const updated = { ...existing, tfnLimit, limitPeriod, tfnRate, overtimeThreshold, excessMode, workerType };
+        // Empty weeks are only charged from the day full time was switched on.
+        const fullTime = excessMode === "bank" && ftRaw;
+        const fullTimeSince = fullTime ? (existing.fullTime && existing.fullTimeSince ? existing.fullTimeSince : todayStr()) : undefined;
+        const updated = { ...existing, tfnLimit, limitPeriod, tfnRate, overtimeThreshold, excessMode, workerType, fullTime, fullTimeSince };
         setWorkerSettings(prev => ({ ...prev, [wid]: updated }));
         return saveWorkerSettingsSvc(supabase, wid, updated);
       })

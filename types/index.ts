@@ -10,7 +10,13 @@ export interface Entry {
   officeHours?: boolean;
   client?: string;
   ownerId?: string; // admin: the user_id who owns this entry
+  // A paid day off logged by a full-time Hour Bank worker. Stored as
+  // 00:00 → (leave hours) so every calculation counts it like worked time.
+  // null = explicitly a work entry (clears a former leave day on save).
+  leaveType?: LeaveType | null;
 }
+
+export type LeaveType = "annual" | "sick" | "public_holiday";
 
 export type InviteStatus = "accepted" | "pending" | "expired";
 
@@ -86,6 +92,12 @@ export interface Settings {
   overtimeThreshold: number;
   excessMode?: "abn" | "bank";
   workerType?: "office" | "site";
+  // Full-time Hour Bank worker: can log leave days, and a finished week with
+  // no entries at all costs the whole limit. Set by an admin on the Team tab;
+  // fullTimeSince (YYYY-MM-DD) is when it was switched on — earlier weeks are
+  // never charged.
+  fullTime?: boolean;
+  fullTimeSince?: string;
   pdfNamePattern: string;
   templates?: EntryTemplate[];
   reminderEnabled?: boolean;
@@ -114,6 +126,7 @@ export interface FormState {
   breakMins: string;
   client: string;
   officeHours?: boolean;
+  leaveType?: LeaveType | "";
 }
 
 export interface Toast {
