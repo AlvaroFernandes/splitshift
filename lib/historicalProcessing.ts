@@ -1,6 +1,6 @@
 import type { Entry, ProcessedEntry, SavedInvoice, Settings } from "@/types";
 import type { BankClosure } from "@/services/bankClosures";
-import { processEntries, weekStart, budgetPeriod, limitPeriodOf, type LimitPeriod } from "./calculations";
+import { processEntries, weekStart, weekEnd, budgetPeriod, limitPeriodOf, type LimitPeriod } from "./calculations";
 
 interface Regime {
   tfnLimit: number;
@@ -95,6 +95,25 @@ export function processEntriesWithHistory(
   }
 
   return result;
+}
+
+// Hours a closed Hour Bank week books into the bank, from its entries as they
+// are now: hours over the limit, minus any shortfall (the week counts as
+// ended). closeWeek freezes this when a week is closed, and it's recomputed
+// whenever an entry in a closed week is edited or deleted, so the bank never
+// drifts from the entries.
+export function closedWeekBankHours(
+  entries: Entry[],
+  settings: Settings,
+  invoices: SavedInvoice[],
+  bankClosures: BankClosure[],
+  ws: string,
+): number {
+  const dayAfter = new Date(weekEnd(ws) + "T12:00:00");
+  dayAfter.setDate(dayAfter.getDate() + 1);
+  return processEntriesWithHistory(entries, settings, invoices, bankClosures, dayAfter.toISOString().slice(0, 10))
+    .filter(e => weekStart(e.date) === ws)
+    .reduce((s, e) => s + e.bankHours, 0);
 }
 
 // Which mode actually governed a given week — for labeling reports. Mirrors

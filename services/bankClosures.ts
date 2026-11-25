@@ -85,3 +85,15 @@ export async function saveBankClosure(
   if (error || !data) return null;
   return fromRow(data as Record<string, unknown>);
 }
+
+// Re-freezes a closed week's banked hours after its entries changed. Server
+// side only (service-role client): there's no UPDATE policy on bank_closures,
+// so the browser can't rewrite a closure's hours.
+export async function updateBankClosureHours(
+  supabase: SupabaseClient, id: string, hours: number,
+): Promise<BankClosure | null> {
+  const { data, error } = await supabase.from("bank_closures")
+    .update({ hours }).eq("id", id).select().single();
+  if (error || !data) return null;
+  return fromRow(data as Record<string, unknown>);
+}

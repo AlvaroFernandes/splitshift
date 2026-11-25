@@ -8,7 +8,7 @@ import type {
   FormState, Toast, InvLineRow, SavedInvoice, UserRole,
 } from "@/types";
 import { calcHours, processEntries, weekStart, weekEnd, limitPeriodOf } from "@/lib/calculations";
-import { processEntriesWithHistory } from "@/lib/historicalProcessing";
+import { processEntriesWithHistory, closedWeekBankHours } from "@/lib/historicalProcessing";
 import { todayStr, genId } from "@/lib/formatters";
 import { getEntries, upsertEntry, deleteEntry, archiveEntries, unarchiveEntries } from "@/services/entries";
 import { DEFAULT_SETTINGS, getWorkerSettings, saveWorkerSettings as saveWorkerSettingsSvc } from "@/services/settings";
@@ -347,6 +347,32 @@ export function useAppData() {
     });
   }, []); // supabase/showToast/setters/refs are stable
 
+  // After an entry in a closed week is edited or deleted, re-freeze that
+  // week's Hour Bank closure from the entries as they are now (server side —
+  // see /api/bank-closures/resync). Weeks that aren't closed Hour Bank weeks
+  // are ignored by the server, so this is safe to call for any closed entry.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const resyncBankClosures = useCallback(async (ownerId: string, dates: string[]): Promise<boolean> => {
+    const weekStarts = [...new Set(dates.map(weekStart))];
+    try {
+      const res = await fetch("/api/bank-closures/resync", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: ownerId, weekStarts }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const { closures } = await res.json() as { closures: BankClosure[] };
+      if (closures.length === 0) return true;
+      const merge = (prev: BankClosure[]) => prev.map(c => closures.find(u => u.id === c.id) ?? c);
+      if (ownerId === userIdRef.current) setBankClosures(merge);
+      else setBankClosuresByWorker(prev => ({ ...prev, [ownerId]: merge(prev[ownerId] ?? []) }));
+      showToast("Hour Bank recalculated for the closed week");
+      return true;
+    } catch {
+      showToast("Entry saved, but the Hour Bank could not be recalculated", "err");
+      return false;
+    }
+  }, []); // showToast/setters/refs are stable
+
   const handleSave = useCallback(async (formData: FormState): Promise<boolean> => {
     const { date, jobDescription, startTime, endTime, hourlyRate } = formData;
     if (!date || !jobDescription.trim() || !startTime || !endTime || !hourlyRate) {
@@ -385,7 +411,10 @@ export function useAppData() {
       : [...entries, entry];
     setEntries(newEntries);
     showToast(editId ? "Entry updated" : "Entry added");
-    if (original?.archived) recomputeInvoiceForEntry(newEntries, entry.date);
+    if (original?.archived) {
+      recomputeInvoiceForEntry(newEntries, entry.date);
+      if (userId) resyncBankClosures(userId, [original.date, entry.date]);
+    }
     setEditId(null);
     return true;
   }, [editId, userId, entries]); // formData is a param; showToast/saveEntry/setters/recomputeInvoiceForEntry are stable
@@ -412,8 +441,10 @@ export function useAppData() {
 
   const handleAdminSave = useCallback(async (updated: Entry) => {
     if (!userId) return;
+    const original = entriesRef.current.find(e => e.id === updated.id);
     const ok = await saveEntry(updated, updated.ownerId ?? userId);
     if (!ok) { showToast("Could not save entry", "err"); return; }
+    if (original?.archived) resyncBankClosures(updated.ownerId ?? userId, [original.date, updated.date]);
     setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
     setAdminEditEntry(null);
     showToast("Entry updated");
@@ -434,8 +465,12 @@ export function useAppData() {
       const workerName = managedUsersRef.current.find(u => u.id === entry.ownerId)?.name ?? "worker";
       recordAudit("entry_deleted", "entry", id, { workerName, entryDate: entry.date, jobDescription: entry.jobDescription });
     }
-    if (entry?.archived) recomputeInvoiceForEntry(remaining, entry.date);
-  }, []); // removeEntry/showToast/setters/refs/recordAudit/recomputeInvoiceForEntry are stable
+    if (entry?.archived) {
+      recomputeInvoiceForEntry(remaining, entry.date);
+      const owner = entry.ownerId ?? userIdRef.current;
+      if (owner) resyncBankClosures(owner, [entry.date]);
+    }
+  }, []); // removeEntry/showToast/setters/refs/recordAudit/recomputeInvoiceForEntry/resyncBankClosures are stable
 
   const handleSettingsSave = useCallback(async (s: Settings) => {
     setSettings(s);
@@ -862,7 +897,19 @@ export function useAppData() {
       // under, not get silently reprocessed under the new one. ABN weeks
       // closed here have no invoice to carry that snapshot, so they need
       // this record just as much as bank weeks do.
-      const bankedHours = isBank ? weekEntries.reduce((s, e) => s + e.bankHours, 0) : 0;
+      // Re-closing a week (an entry was added after it was closed): its
+      // closure already exists, and the browser can't update closures (no
+      // UPDATE policy — the upsert below would fail silently and keep the old
+      // hours), so the server recalculates it from the entries instead. The
+      // closure keeps the regime it was first closed under.
+      if (bankClosures.some(c => c.weekStart === ws)) {
+        setEntries(prev => prev.map(e => toCloseIds.includes(e.id) ? { ...e, archived: true } : e));
+        if (await resyncBankClosures(userId, [ws])) {
+          showToast(isBank ? "Week closed — Hour Bank updated" : "Week closed — no invoice needed");
+        }
+        return;
+      }
+      const bankedHours = isBank ? closedWeekBankHours(entries, settings, invoiceHistory, bankClosures, ws) : 0;
       const closure = await saveBankClosure(supabase, {
         userId, weekStart: ws, weekEnd: weekEnd(ws), hours: bankedHours,
         mode: isBank ? "bank" : "abn",
